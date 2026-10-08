@@ -14,6 +14,7 @@ import ItemForm, { type ItemFormValues } from "@/components/ItemForm";
 import ItemRow from "@/components/ItemRow";
 import ProgressBar from "@/components/ProgressBar";
 import SavedItemPicker from "@/components/SavedItemPicker";
+import SharePanel from "@/components/SharePanel";
 import StatusBadge from "@/components/StatusBadge";
 import { ApiError, apiFetch } from "@/lib/apiClient";
 import { formatRupees } from "@/lib/format";
@@ -30,6 +31,7 @@ export default function FolderView() {
   const [state, setState] = useState<LoadState>("loading");
   const [error, setError] = useState("");
   const [showPicker, setShowPicker] = useState(false);
+  const [showShare, setShowShare] = useState(false);
   // A saved item loaded into the add form by "Edit & add". `key` remounts the form with it.
   const [prefill, setPrefill] = useState<{ key: number; item: SavedItemDTO } | null>(null);
 
@@ -149,13 +151,27 @@ export default function FolderView() {
       <Link href="/" className="link text-sm">
         ← All folders
       </Link>
-      <div className="mt-2 mb-3 flex flex-wrap items-center gap-3">
+      <div className="mt-2 mb-1 flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold wrap-break-word text-primary">{folder.name}</h1>
         <StatusBadge status={folder.status} />
+        {folder.canManage && !showShare && (
+          <button onClick={() => setShowShare(true)} className="btn-secondary ml-auto text-sm">
+            Share
+          </button>
+        )}
       </div>
-      <div className="mb-6">
+      {folder.sharedBy && (
+        <p className="mb-2 text-sm text-muted">
+          Shared by <span className="text-accent">{folder.sharedBy.name}</span>
+          {!folder.canCheck && " · view only"}
+          {folder.canCheck && !folder.canEdit && " · you can tick items"}
+        </p>
+      )}
+      <div className="mt-2 mb-6">
         <ProgressBar done={doneCount} total={items.length} />
       </div>
+
+      {showShare && <SharePanel folderId={folder.id} onClose={() => setShowShare(false)} />}
 
       {folder.canEdit && (
         <>

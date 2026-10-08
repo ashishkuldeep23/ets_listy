@@ -1,9 +1,10 @@
 import { requireUser } from "@/lib/auth";
-import { getFolderAccess } from "@/lib/access";
+import { getFolderAccess, permissionsOf } from "@/lib/access";
 import { validateUpdateFolder } from "@/lib/validators";
 import { jsonError, readJson, serverError } from "@/lib/http";
 import { Folder, serializeFolder } from "@/models/Folder";
 import { Item } from "@/models/Item";
+import { Share } from "@/models/Share";
 import type { FolderDetailDTO } from "@/types";
 
 type Ctx = RouteContext<"/api/folders/[id]">;
@@ -23,8 +24,7 @@ export async function GET(request: Request, ctx: Ctx): Promise<Response> {
     const access = await getFolderAccess(user.id, id);
     if (!access) return jsonError(NOT_FOUND, 404);
 
-    const { role, canCheck, canEdit, canManage } = access;
-    const body: FolderDetailDTO = { ...serializeFolder(access.folder), role, canCheck, canEdit, canManage };
+    const body: FolderDetailDTO = { ...serializeFolder(access.folder), ...permissionsOf(access) };
     return Response.json(body);
   } catch (err) {
     return serverError(err);
@@ -70,9 +70,10 @@ export async function DELETE(request: Request, ctx: Ctx): Promise<Response> {
     if (!access) return jsonError(NOT_FOUND, 404);
     if (!access.canManage) return jsonError("Only the owner can delete this folder", 403);
 
-    // Delete the folder's items too, so nothing is left orphaned.
-    // LATER (Phase 3): also delete its shares + share link here.
+    // Delete everything that belongs to the folder, so nothing is left orphaned.
+    // LATER (Phase 3.2): also delete its share link here.
     await Item.deleteMany({ folder: access.folder._id });
+    await Share.deleteMany({ folder: access.folder._id });
     await Folder.deleteOne({ _id: access.folder._id });
     return new Response(null, { status: 204 });
   } catch (err) {

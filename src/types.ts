@@ -19,13 +19,18 @@ export interface FolderDTO {
   updatedAt: string | Date;
 }
 
-/** GET /api/folders/:id adds what the caller may do (see lib/access.ts). */
-export interface FolderDetailDTO extends FolderDTO {
-  role: "owner";
+/** What the caller may do with a folder (see lib/access.ts). */
+export interface FolderPermissions {
+  role: "owner" | "shared";
   canCheck: boolean;
   canEdit: boolean;
   canManage: boolean;
+  /** For shared folders: the owner who shared it. null for my own folders. */
+  sharedBy: UserRef | null;
 }
+
+/** GET /api/folders/:id */
+export interface FolderDetailDTO extends FolderDTO, FolderPermissions {}
 
 /** Count of my folders per status, plus "all". */
 export type FolderCounts = Record<FolderStatus | "all", number>;
@@ -46,6 +51,20 @@ export interface FolderListResponse {
 export interface UserRef {
   id: string;
   name: string;
+}
+
+/** One person a folder is shared with, as the owner sees it. */
+export interface ShareDTO {
+  /** Email is shown to the owner only, who typed it in to share. */
+  user: UserRef & { email: string };
+  canCheck: boolean;
+  canEdit: boolean;
+  via: "email" | "link";
+}
+
+/** GET /api/folders/:id/shares */
+export interface ShareListResponse {
+  shares: ShareDTO[];
 }
 
 /** An item inside a folder. Optional fields are null when not set. */

@@ -299,3 +299,48 @@ export function cleanSearchQuery(q: string | null): string | null {
   const t = q?.trim().slice(0, LIMITS.SEARCH_QUERY_MAX);
   return t ? t : null;
 }
+
+/* ---------- sharing ---------- */
+
+export interface SharePermissionsInput {
+  canCheck?: boolean;
+  canEdit?: boolean;
+}
+
+/** Reads optional boolean canCheck / canEdit into `out`; returns an error or null. */
+function readPermissions(body: Body, out: SharePermissionsInput): string | null {
+  for (const key of ["canCheck", "canEdit"] as const) {
+    const v = body[key];
+    if (v === undefined) continue;
+    if (typeof v !== "boolean") return `${key} must be true or false`;
+    out[key] = v;
+  }
+  return null;
+}
+
+export interface CreateShareInput {
+  email: string;
+  canCheck: boolean;
+  canEdit: boolean;
+}
+
+/** Body for POST /api/folders/:id/shares: { email, canCheck?, canEdit? }. Missing flags = false. */
+export function validateCreateShare(body: unknown): Result<CreateShareInput> {
+  if (!isPlainObject(body)) return fail("body must be a JSON object");
+  const email = cleanEmail(body.email);
+  if (email.error !== undefined) return fail(email.error);
+  const perms: SharePermissionsInput = {};
+  const error = readPermissions(body, perms);
+  if (error) return fail(error);
+  return { ok: true, value: { email: email.value, canCheck: perms.canCheck ?? false, canEdit: perms.canEdit ?? false } };
+}
+
+/** Body for PATCH .../shares/:userId and the share link: { canCheck?, canEdit? }, at least one. */
+export function validateSharePermissions(body: unknown): Result<SharePermissionsInput> {
+  if (!isPlainObject(body)) return fail("body must be a JSON object");
+  const value: SharePermissionsInput = {};
+  const error = readPermissions(body, value);
+  if (error) return fail(error);
+  if (Object.keys(value).length === 0) return fail("nothing to update");
+  return { ok: true, value };
+}

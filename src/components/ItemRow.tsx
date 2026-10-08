@@ -60,6 +60,7 @@ export default function ItemRow({ item, groups, canCheck, canEdit, onToggle, onS
           {item.price !== null && <span className="text-sm font-medium text-primary">{formatRupees(item.price)}</span>}
         </div>
         {item.description && <p className="mt-1 text-sm wrap-break-word text-muted">{item.description}</p>}
+        {item.done && item.doneBy && <p className="mt-1 text-xs text-accent">✓ by {item.doneBy.name}</p>}
       </div>
 
       {canEdit && (

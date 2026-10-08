@@ -53,6 +53,8 @@ src/
     api/folders/[id]/items/[itemId]/route.ts     # PATCH, DELETE (canEdit)
     api/folders/[id]/items/[itemId]/toggle/route.ts # POST { done } (canCheck)
     api/folders/[id]/groups/rename/route.ts      # POST { from, to } (canEdit)
+    api/folders/[id]/shares/route.ts             # GET, POST { email, canCheck, canEdit } (canManage)
+    api/folders/[id]/shares/[userId]/route.ts    # PATCH perms, DELETE (canManage)
     api/saved-items/route.ts                     # GET ?q= (my saved items), POST (upsert)
     api/saved-items/[id]/route.ts                # PATCH (409 on duplicate), DELETE
     profile/page.tsx         # my profile + saved items (components/ProfileView.tsx)
@@ -67,6 +69,8 @@ src/
     ItemRow.tsx              # one item: tick, details, edit, delete
     GroupSection.tsx         # collapsible group of items + rename
     SavedItemPicker.tsx      # "Add from saved" panel (Add / Edit & add)
+    SharePanel.tsx           # owner: share by email, people + permissions
+    PermissionCheckboxes.tsx # View (always) / Can tick / Can edit
     ProfileView.tsx          # profile page body
   hooks/
     useSavedItems.ts         # debounced saved-items search, shared by picker + profile
@@ -74,7 +78,8 @@ src/
     db.ts          # cached Mongoose connection: always use connectDB()
     session.ts     # sign/verify session JWT (jose); no DB, used by proxy.ts
     auth.ts        # hashPassword, getSessionUser, requireUser, session cookie
-    access.ts      # getFolderAccess(): the ONLY folder permission check
+    access.ts      # getFolderAccess(): the ONLY folder permission check (owner or Share row)
+    shares.ts      # listShares() for the owner view
     constants.ts   # FOLDER_STATUSES: add new statuses here only
     apiClient.ts   # apiFetch<T>() + ApiError: browser fetch wrapper, use for all UI calls
     items.ts       # toItemUpdate() (null → $unset), countItems(), countItemsByFolder()
@@ -91,6 +96,7 @@ src/
     Folder.ts      # + serializeFolder(), statusFilter() (missing status = active)
     Item.ts        # + serializeItem(); populate DONE_BY_NAME for doneBy (name only)
     SavedItem.ts   # private per user; unique owner+nameKey+categoryKey (case-insensitive)
+    Share.ts       # folder + sharedWith (unique), canCheck/canEdit; normalizePermissions()
   test/
     setup.ts       # setupTestDb(), makeRequest(), routeCtx(), json<T>(), createUserAndCookie()
 ```
@@ -162,6 +168,10 @@ src/
    and scopes its queries to that user. `src/proxy.ts` only redirects pages;
    it is not an API guard. Never return `passwordHash`, and keep auth
    failures vague ("Invalid email or password").
+   Sharing is decided **only** inside `getFolderAccess()` (owner, or a Share
+   row). Edit always includes tick: write permissions via
+   `normalizePermissions()`. Only `UserRef` (id + name) is sent about other
+   people; the owner's share list is the one place emails appear.
    Folder and item routes decide access **only** via `getFolderAccess()`
    (null → 404, missing flag → 403). Item queries always filter by the
    folder from the URL too, so an item can't be reached through another folder. Send API data through `serialize*()`
