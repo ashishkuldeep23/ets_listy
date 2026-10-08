@@ -1,39 +1,64 @@
-import mongoose from "mongoose";
+import mongoose, { type Types } from "mongoose";
 import { connectDB } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
+import { OWNER_PERMISSIONS, sharedWithUser } from "@/lib/access";
 import { LIMITS } from "@/lib/limits";
 import { DEFAULT_STATUS, STATUS_VALUES, isFolderStatus, type FolderStatus } from "@/lib/constants";
-import type { FolderCounts, FolderListResponse } from "@/types";
+import type { FolderCounts, FolderListResponse, FolderPermissions, FolderScope } from "@/types";
 import { isValidStatus, validateCreateFolder } from "@/lib/validators";
 import { jsonError, readJson, serverError } from "@/lib/http";
 import { Folder, serializeFolder, statusFilter } from "@/models/Folder";
 import { countItemsByFolder } from "@/lib/items";
 
+const SCOPES: readonly FolderScope[] = ["mine", "shared"];
+
+const VIEW_ONLY: FolderPermissions = { role: "shared", canCheck: false, canEdit: false, canManage: false, sharedBy: null };
+
 /**
- * GET /api/folders?status=pending
- * My folders, newest first, optionally filtered by status.
+ * GET /api/folders?scope=shared&status=pending
+ * scope "mine" (default): folders I own. scope "shared": folders shared with me.
+ * Newest first, optionally filtered by status.
  * → { folders, counts: { all, active, pending, completed } }
- * Counts are always for all my folders, so filter chips can show them.
+ * Each folder carries what I may do with it and its item progress.
+ * Counts cover every folder in the scope, so filter chips can show them.
  */
 export async function GET(request: Request): Promise<Response> {
   try {
     const user = await requireUser(request);
     if (user instanceof Response) return user;
 
-    const param = new URL(request.url).searchParams.get("status");
+    const params = new URL(request.url).searchParams;
+    const scopeParam = params.get("scope") ?? "mine";
+    if (!(SCOPES as readonly string[]).includes(scopeParam)) {
+      return jsonError(`scope must be one of: ${SCOPES.join(", ")}`, 400);
+    }
+    const statusParam = params.get("status");
     let status: FolderStatus | null = null;
-    if (param !== null) {
-      if (!isValidStatus(param)) return jsonError(`status must be one of: ${STATUS_VALUES.join(", ")}`, 400);
-      status = param;
+    if (statusParam !== null) {
+      if (!isValidStatus(statusParam)) return jsonError(`status must be one of: ${STATUS_VALUES.join(", ")}`, 400);
+      status = statusParam;
     }
 
     await connectDB();
-    const owner = user.id;
+
+    // Which folders are in scope, and what I may do with each.
+    // aggregate() skips Mongoose casting, so ids must be ObjectIds in `scopeFilter`.
+    let scopeFilter: { owner: Types.ObjectId } | { _id: { $in: Types.ObjectId[] } };
+    let permsFor: (folderId: string) => FolderPermissions;
+    if (scopeParam === "mine") {
+      scopeFilter = { owner: new mongoose.Types.ObjectId(user.id) };
+      permsFor = () => OWNER_PERMISSIONS;
+    } else {
+      const shared = await sharedWithUser(user.id);
+      scopeFilter = { _id: { $in: [...shared.keys()].map((id) => new mongoose.Types.ObjectId(id)) } };
+      // Every folder in this scope has a share; fall back to the least access just in case.
+      permsFor = (id) => shared.get(id) ?? VIEW_ONLY;
+    }
+
     const [folders, grouped] = await Promise.all([
-      Folder.find({ owner, ...(status && statusFilter(status)) }).sort({ updatedAt: -1 }).lean(),
+      Folder.find({ ...scopeFilter, ...(status && statusFilter(status)) }).sort({ updatedAt: -1 }).lean(),
       Folder.aggregate<{ _id: string; n: number }>([
-        // aggregate() skips Mongoose casting, so the id must be an ObjectId here.
-        { $match: { owner: new mongoose.Types.ObjectId(owner) } },
+        { $match: scopeFilter },
         // Folders without a status count as the default one.
         { $group: { _id: { $ifNull: ["$status", DEFAULT_STATUS] }, n: { $sum: 1 } } },
       ]),
@@ -48,6 +73,7 @@ export async function GET(request: Request): Promise<Response> {
     const body: FolderListResponse = {
       folders: folders.map((f) => ({
         ...serializeFolder(f),
+        ...permsFor(String(f._id)),
         ...(progress.get(String(f._id)) ?? { itemCount: 0, doneCount: 0 }),
       })),
       counts,

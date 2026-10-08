@@ -35,11 +35,14 @@ export interface FolderDetailDTO extends FolderDTO, FolderPermissions {}
 /** Count of my folders per status, plus "all". */
 export type FolderCounts = Record<FolderStatus | "all", number>;
 
-/** Folder card on the home page: the folder plus item progress. */
-export interface FolderSummaryDTO extends FolderDTO {
+/** Folder card on the home page: the folder, what I may do, and item progress. */
+export interface FolderSummaryDTO extends FolderDTO, FolderPermissions {
   itemCount: number;
   doneCount: number;
 }
+
+/** Which folders the home page lists. */
+export type FolderScope = "mine" | "shared";
 
 /** GET /api/folders */
 export interface FolderListResponse {

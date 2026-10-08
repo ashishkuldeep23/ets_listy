@@ -3,12 +3,13 @@
 // Profile page body: my name/email and my saved items library
 // (search, add, edit, delete). Saved items are private to me.
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import ItemForm, { type ItemFormValues } from "@/components/ItemForm";
 import { useSavedItems } from "@/hooks/useSavedItems";
 import { apiFetch } from "@/lib/apiClient";
 import { formatRupees } from "@/lib/format";
-import type { SavedItemDTO, SessionUser } from "@/types";
+import type { FolderListResponse, SavedItemDTO, SessionUser } from "@/types";
 
 /** Saved items have no group, so send only their own fields. */
 function toSavedBody({ name, category, price, description }: ItemFormValues) {
@@ -17,6 +18,7 @@ function toSavedBody({ name, category, price, description }: ItemFormValues) {
 
 export default function ProfileView() {
   const [user, setUser] = useState<SessionUser | null>(null);
+  const [sharedCount, setSharedCount] = useState<number | null>(null);
   const [query, setQuery] = useState("");
   const [actionError, setActionError] = useState("");
   const { savedItems, loading, error, reload } = useSavedItems(query);
@@ -24,6 +26,9 @@ export default function ProfileView() {
   useEffect(() => {
     apiFetch<SessionUser>("/api/auth/me")
       .then(setUser)
+      .catch(() => {});
+    apiFetch<FolderListResponse>("/api/folders?scope=shared")
+      .then((data) => setSharedCount(data.counts.all))
       .catch(() => {});
   }, []);
 
@@ -54,6 +59,11 @@ export default function ProfileView() {
       <section className="card">
         <h1 className="text-2xl font-semibold text-primary">{user?.name ?? "Your profile"}</h1>
         {user && <p className="text-muted">{user.email}</p>}
+        {sharedCount !== null && (
+          <Link href="/?tab=shared" className="link mt-2 inline-block text-sm">
+            {sharedCount} {sharedCount === 1 ? "folder" : "folders"} shared with you →
+          </Link>
+        )}
       </section>
 
       <section className="flex flex-col gap-3">

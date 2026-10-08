@@ -47,14 +47,14 @@ src/
     login/, signup/          # auth pages (use components/AuthForm.tsx)
     folders/[id]/page.tsx    # one folder (components/FolderView.tsx)
     api/auth/signup|login|logout|me/route.ts
-    api/folders/route.ts     # GET my folders (?status=, + counts), POST create
+    api/folders/route.ts     # GET ?scope=mine|shared&status= (+ counts, perms, progress), POST create
     api/folders/[id]/route.ts # GET (+ canCheck/canEdit/canManage), PATCH, DELETE (+ its items)
     api/folders/[id]/items/route.ts              # GET items + counts, POST (canEdit)
     api/folders/[id]/items/[itemId]/route.ts     # PATCH, DELETE (canEdit)
     api/folders/[id]/items/[itemId]/toggle/route.ts # POST { done } (canCheck)
     api/folders/[id]/groups/rename/route.ts      # POST { from, to } (canEdit)
     api/folders/[id]/shares/route.ts             # GET, POST { email, canCheck, canEdit } (canManage)
-    api/folders/[id]/shares/[userId]/route.ts    # PATCH perms, DELETE (canManage)
+    api/folders/[id]/shares/[userId]/route.ts    # PATCH perms (canManage), DELETE (canManage, or self = leave)
     api/folders/[id]/share-link/route.ts         # GET, POST { canCheck, canEdit, enabled } (canManage)
     api/folders/[id]/share-link/reset/route.ts   # POST: new token (canManage)
     api/share/[token]/accept/route.ts            # POST: join via link (logged in, rate-limited)
@@ -65,7 +65,7 @@ src/
   components/
     Header.tsx               # top bar with user name + Logout
     AuthForm.tsx             # shared login/signup form
-    FolderList.tsx           # home: create / rename / delete folders
+    FolderList.tsx           # home: tabs My folders / Shared with me (?tab=shared), status chips
     FolderView.tsx           # folder page body
     StatusBadge.tsx          # folder status label
     ProgressBar.tsx          # "3 / 10 done" bar
@@ -83,7 +83,7 @@ src/
     db.ts          # cached Mongoose connection: always use connectDB()
     session.ts     # sign/verify session JWT (jose); no DB, used by proxy.ts
     auth.ts        # hashPassword, getSessionUser, requireUser, session cookie
-    access.ts      # getFolderAccess(): the ONLY folder permission check (owner or Share row)
+    access.ts      # getFolderAccess() (one folder) + sharedWithUser() (bulk): the ONLY permission logic
     shares.ts      # listShares(), getShareLink(), serializeShareLink() for the owner view
     constants.ts   # FOLDER_STATUSES: add new statuses here only
     apiClient.ts   # apiFetch<T>() + ApiError: browser fetch wrapper, use for all UI calls

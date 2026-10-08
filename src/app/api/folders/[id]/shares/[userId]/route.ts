@@ -47,7 +47,7 @@ export async function PATCH(request: Request, ctx: Ctx): Promise<Response> {
 }
 
 // DELETE /api/folders/:id/shares/:userId → 204.
-// The owner can remove anyone (LATER, Phase 3.3: users can also remove themselves to leave).
+// The owner can remove anyone; a shared user can remove only themselves ("Leave folder").
 export async function DELETE(request: Request, ctx: Ctx): Promise<Response> {
   try {
     const user = await requireUser(request);
@@ -56,7 +56,8 @@ export async function DELETE(request: Request, ctx: Ctx): Promise<Response> {
     const { id, userId } = await ctx.params;
     const access = await getFolderAccess(user.id, id);
     if (!access) return jsonError("Folder not found", 404);
-    if (!access.canManage) return jsonError("Only the owner can remove people", 403);
+    const leaving = access.role === "shared" && userId === user.id;
+    if (!access.canManage && !leaving) return jsonError("Only the owner can remove people", 403);
 
     if (!mongoose.isValidObjectId(userId)) return jsonError(NOT_FOUND, 404);
     const { deletedCount } = await Share.deleteOne({ folder: access.folder._id, sharedWith: userId });

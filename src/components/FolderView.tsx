@@ -7,7 +7,7 @@
 // What the user may do (tick / edit) comes from the API, not guessed here.
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import GroupSection from "@/components/GroupSection";
 import ItemForm, { type ItemFormValues } from "@/components/ItemForm";
@@ -19,12 +19,13 @@ import StatusBadge from "@/components/StatusBadge";
 import { ApiError, apiFetch } from "@/lib/apiClient";
 import { formatRupees } from "@/lib/format";
 import { computeTotals, groupItems } from "@/lib/totals";
-import type { FolderDetailDTO, ItemDTO, ItemListResponse, SavedItemDTO } from "@/types";
+import type { FolderDetailDTO, ItemDTO, ItemListResponse, SavedItemDTO, SessionUser } from "@/types";
 
 type LoadState = "loading" | "ready" | "notFound" | "error";
 
 export default function FolderView() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const [folder, setFolder] = useState<FolderDetailDTO | null>(null);
   const [items, setItems] = useState<ItemDTO[]>([]);
   const [groups, setGroups] = useState<string[]>([]);
@@ -142,6 +143,16 @@ export default function FolderView() {
     });
   }
 
+  // A shared user removes their own access ("Leave folder").
+  async function leaveFolder() {
+    if (!confirm(`Leave "${folder?.name}"? It will disappear from your "Shared with me".`)) return;
+    const ok = await run(async () => {
+      const me = await apiFetch<SessionUser>("/api/auth/me");
+      await apiFetch(`/api/folders/${id}/shares/${me.id}`, { method: "DELETE" });
+    });
+    if (ok) router.replace("/?tab=shared");
+  }
+
   const doneCount = items.filter((i) => i.done).length;
   const totals = computeTotals(items);
   const sections = groupItems(items);
@@ -160,12 +171,18 @@ export default function FolderView() {
           </button>
         )}
       </div>
-      {folder.sharedBy && (
-        <p className="mb-2 text-sm text-muted">
-          Shared by <span className="text-accent">{folder.sharedBy.name}</span>
-          {!folder.canCheck && " · view only"}
-          {folder.canCheck && !folder.canEdit && " · you can tick items"}
-        </p>
+      {folder.role === "shared" && (
+        <div className="mb-2 flex flex-wrap items-center gap-3 text-sm text-muted">
+          <span>
+            Shared by <span className="text-accent">{folder.sharedBy?.name ?? "someone"}</span>
+            {!folder.canCheck && " · view only"}
+            {folder.canCheck && !folder.canEdit && " · you can tick items"}
+            {folder.canEdit && " · you can edit items"}
+          </span>
+          <button onClick={leaveFolder} className="ml-auto text-danger hover:underline">
+            Leave folder
+          </button>
+        </div>
       )}
       <div className="mt-2 mb-6">
         <ProgressBar done={doneCount} total={items.length} />
