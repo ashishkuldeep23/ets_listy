@@ -57,6 +57,8 @@ export interface ItemDTO {
   /** Rupees. */
   price: number | null;
   description: string | null;
+  /** Group name inside the folder (e.g. "Vegetables"); null = ungrouped. */
+  group: string | null;
   done: boolean;
   doneBy: UserRef | null;
   doneAt: string | Date | null;
@@ -70,6 +72,8 @@ export interface ItemListResponse {
   items: ItemDTO[];
   total: number;
   done: number;
+  /** Distinct group names in this folder, sorted. */
+  groups: string[];
 }
 
 /** Result of a request-body validator: only allowed fields, or an error. */

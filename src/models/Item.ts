@@ -11,6 +11,8 @@ export interface IItem {
   category?: string;
   price?: number;
   description?: string;
+  /** Group name inside the folder; unset = ungrouped. */
+  group?: string;
   done: boolean;
   /** Who ticked it; cleared when unticked. */
   doneBy?: Types.ObjectId;
@@ -29,6 +31,7 @@ const itemSchema = new mongoose.Schema<IItem>(
     category: { type: String, trim: true, maxlength: LIMITS.ITEM_CATEGORY_MAX },
     price: { type: Number, min: 0, max: LIMITS.ITEM_PRICE_MAX },
     description: { type: String, trim: true, maxlength: LIMITS.ITEM_DESCRIPTION_MAX },
+    group: { type: String, trim: true, maxlength: LIMITS.ITEM_GROUP_MAX },
     done: { type: Boolean, default: false },
     doneBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     doneAt: { type: Date },
@@ -67,6 +70,7 @@ export function serializeItem(item: ItemDoc): ItemDTO {
     category: item.category ?? null,
     price: item.price ?? null,
     description: item.description ?? null,
+    group: item.group ?? null,
     done: item.done,
     doneBy: toUserRef(item.doneBy),
     doneAt: item.doneAt ?? null,

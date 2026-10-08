@@ -9,6 +9,8 @@ import type { ItemDTO } from "@/types";
 
 interface ItemRowProps {
   item: ItemDTO;
+  /** Group suggestions for the edit form. */
+  groups: string[];
   canCheck: boolean;
   canEdit: boolean;
   onToggle: () => void;
@@ -16,7 +18,7 @@ interface ItemRowProps {
   onDelete: () => void;
 }
 
-export default function ItemRow({ item, canCheck, canEdit, onToggle, onSave, onDelete }: ItemRowProps) {
+export default function ItemRow({ item, groups, canCheck, canEdit, onToggle, onSave, onDelete }: ItemRowProps) {
   const [editing, setEditing] = useState(false);
 
   if (editing) {
@@ -24,6 +26,7 @@ export default function ItemRow({ item, canCheck, canEdit, onToggle, onSave, onD
       <li className="card">
         <ItemForm
           initial={item}
+          groups={groups}
           submitLabel="Save"
           onSubmit={async (values) => {
             const ok = await onSave(values);

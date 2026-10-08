@@ -4,6 +4,7 @@ import {
   validateCreateFolder,
   validateCreateItem,
   validateLogin,
+  validateRenameGroup,
   validateSignup,
   validateToggle,
   validateUpdateFolder,
@@ -158,5 +159,21 @@ describe("item validators", () => {
   it("toggle needs a real boolean", () => {
     expect(validateToggle({ done: true })).toEqual({ ok: true, value: { done: true } });
     for (const done of ["true", 1, null, undefined]) expect(validateToggle({ done }).ok).toBe(false);
+  });
+});
+
+describe("group validation", () => {
+  it("accepts, trims and clears groups on items", () => {
+    expect(validateCreateItem({ name: "A", group: " Veg " })).toEqual({ ok: true, value: { name: "A", group: "Veg" } });
+    expect(validateUpdateItem({ group: null })).toEqual({ ok: true, value: { group: null } });
+    expect(validateCreateItem({ name: "A", group: { $ne: null } }).ok).toBe(false);
+    expect(validateCreateItem({ name: "A", group: "x".repeat(LIMITS.ITEM_GROUP_MAX + 1) }).ok).toBe(false);
+  });
+
+  it("rename needs a from; to may be empty (ungroup)", () => {
+    expect(validateRenameGroup({ from: " Veg ", to: " Veggies " })).toEqual({ ok: true, value: { from: "Veg", to: "Veggies" } });
+    expect(validateRenameGroup({ from: "Veg", to: "" })).toEqual({ ok: true, value: { from: "Veg", to: null } });
+    expect(validateRenameGroup({ from: "Veg" })).toEqual({ ok: true, value: { from: "Veg", to: null } });
+    expect(validateRenameGroup({ to: "X" }).ok).toBe(false);
   });
 });

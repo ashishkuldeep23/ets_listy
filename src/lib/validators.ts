@@ -183,6 +183,7 @@ export interface ItemFieldsInput {
   category?: string | null;
   price?: number | null;
   description?: string | null;
+  group?: string | null;
 }
 
 /** Reads the optional item fields from `body` into `out`; returns an error message or null. */
@@ -193,10 +194,13 @@ function readOptionalItemFields(body: Body, out: ItemFieldsInput): string | null
   if (price.error !== undefined) return price.error;
   const description = cleanOptionalText(body.description, "description", LIMITS.ITEM_DESCRIPTION_MAX);
   if (description.error !== undefined) return description.error;
+  const group = cleanOptionalText(body.group, "group", LIMITS.ITEM_GROUP_MAX);
+  if (group.error !== undefined) return group.error;
 
   if (category.value !== undefined) out.category = category.value;
   if (price.value !== undefined) out.price = price.value;
   if (description.value !== undefined) out.description = description.value;
+  if (group.value !== undefined) out.group = group.value;
   return null;
 }
 
@@ -204,7 +208,7 @@ export interface CreateItemInput extends ItemFieldsInput {
   name: string;
 }
 
-/** Body for POST /api/folders/:id/items: { name, category?, price?, description? }. */
+/** Body for POST /api/folders/:id/items: { name, category?, price?, description?, group? }. */
 export function validateCreateItem(body: unknown): Result<CreateItemInput> {
   if (!isPlainObject(body)) return fail("body must be a JSON object");
   const name = cleanItemName(body.name);
@@ -236,4 +240,21 @@ export function validateUpdateItem(body: unknown): Result<ItemFieldsInput> {
 export function validateToggle(body: unknown): Result<{ done: boolean }> {
   if (!isPlainObject(body) || typeof body.done !== "boolean") return fail("done must be true or false");
   return { ok: true, value: { done: body.done } };
+}
+
+export interface RenameGroupInput {
+  from: string;
+  /** null = move the items out of any group ("Ungrouped"). */
+  to: string | null;
+}
+
+/** Body for POST /api/folders/:id/groups/rename: { from, to }. */
+export function validateRenameGroup(body: unknown): Result<RenameGroupInput> {
+  if (!isPlainObject(body)) return fail("body must be a JSON object");
+  const from = cleanOptionalText(body.from, "from", LIMITS.ITEM_GROUP_MAX);
+  if (from.error !== undefined) return fail(from.error);
+  if (!from.value) return fail("from is required");
+  const to = cleanOptionalText(body.to ?? null, "to", LIMITS.ITEM_GROUP_MAX);
+  if (to.error !== undefined) return fail(to.error);
+  return { ok: true, value: { from: from.value, to: to.value ?? null } };
 }

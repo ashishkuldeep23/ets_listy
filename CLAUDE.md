@@ -52,6 +52,7 @@ src/
     api/folders/[id]/items/route.ts              # GET items + counts, POST (canEdit)
     api/folders/[id]/items/[itemId]/route.ts     # PATCH, DELETE (canEdit)
     api/folders/[id]/items/[itemId]/toggle/route.ts # POST { done } (canCheck)
+    api/folders/[id]/groups/rename/route.ts      # POST { from, to } (canEdit)
   components/
     Header.tsx               # top bar with user name + Logout
     AuthForm.tsx             # shared login/signup form
@@ -61,6 +62,7 @@ src/
     ProgressBar.tsx          # "3 / 10 done" bar
     ItemForm.tsx             # add / edit item (name required, rest optional)
     ItemRow.tsx              # one item: tick, details, edit, delete
+    GroupSection.tsx         # collapsible group of items + rename
   lib/
     db.ts          # cached Mongoose connection: always use connectDB()
     session.ts     # sign/verify session JWT (jose); no DB, used by proxy.ts
@@ -70,6 +72,7 @@ src/
     apiClient.ts   # apiFetch<T>() + ApiError: browser fetch wrapper, use for all UI calls
     items.ts       # toItemUpdate() (null → $unset), countItems(), countItemsByFolder()
     format.ts      # formatRupees()
+    totals.ts      # computeTotals() (in paise), groupItems() (A–Z, ungrouped last)
     rateLimit.ts   # in-memory rate limiter (per process only)
     safeRedirect.ts # safeNextPath() for ?next= redirects
     limits.ts      # size limits shared by validators and schemas

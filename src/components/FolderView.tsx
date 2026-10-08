@@ -1,18 +1,21 @@
 "use client";
 
-// Folder page body: the folder header, progress, and its items (add, edit,
-// tick, delete). Loads the folder by the id in the URL; the API answers 404
+// Folder page body: the folder header, progress, its items grouped into
+// sections (add, edit, tick, delete, rename a group) and price totals. Loads the folder by the id in the URL; the API answers 404
 // for folders that don't exist or aren't mine, shown as "not found".
 // What the user may do (tick / edit) comes from the API, not guessed here.
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import GroupSection from "@/components/GroupSection";
 import ItemForm, { type ItemFormValues } from "@/components/ItemForm";
 import ItemRow from "@/components/ItemRow";
 import ProgressBar from "@/components/ProgressBar";
 import StatusBadge from "@/components/StatusBadge";
 import { ApiError, apiFetch } from "@/lib/apiClient";
+import { formatRupees } from "@/lib/format";
+import { computeTotals, groupItems } from "@/lib/totals";
 import type { FolderDetailDTO, ItemDTO, ItemListResponse } from "@/types";
 
 type LoadState = "loading" | "ready" | "notFound" | "error";
@@ -21,6 +24,7 @@ export default function FolderView() {
   const { id } = useParams<{ id: string }>();
   const [folder, setFolder] = useState<FolderDetailDTO | null>(null);
   const [items, setItems] = useState<ItemDTO[]>([]);
+  const [groups, setGroups] = useState<string[]>([]);
   const [state, setState] = useState<LoadState>("loading");
   const [error, setError] = useState("");
 
@@ -32,6 +36,7 @@ export default function FolderView() {
         if (cancelled) return;
         setFolder(f);
         setItems(list.items);
+        setGroups(list.groups);
         setState("ready");
       })
       .catch((err: unknown) => {
@@ -65,6 +70,11 @@ export default function FolderView() {
   const itemsUrl = `/api/folders/${folder.id}/items`;
   const replaceItem = (updated: ItemDTO) => setItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
 
+  // Keeps group suggestions in sync after an add / edit / rename.
+  const rememberGroup = (group: string | null) => {
+    if (group) setGroups((prev) => (prev.includes(group) ? prev : [...prev, group].sort((a, b) => a.localeCompare(b))));
+  };
+
   // Runs a request and shows its error message; returns true on success.
   async function run(fn: () => Promise<void>): Promise<boolean> {
     setError("");
@@ -81,11 +91,23 @@ export default function FolderView() {
     run(async () => {
       const item = await apiFetch<ItemDTO>(itemsUrl, { method: "POST", body: JSON.stringify(values) });
       setItems((prev) => [...prev, item]);
+      rememberGroup(item.group);
     });
 
   const saveItem = (item: ItemDTO, values: ItemFormValues) =>
     run(async () => {
-      replaceItem(await apiFetch<ItemDTO>(`${itemsUrl}/${item.id}`, { method: "PATCH", body: JSON.stringify(values) }));
+      const updated = await apiFetch<ItemDTO>(`${itemsUrl}/${item.id}`, { method: "PATCH", body: JSON.stringify(values) });
+      replaceItem(updated);
+      rememberGroup(updated.group);
+    });
+
+  // Renames a group on the server, then mirrors it locally (no refetch needed).
+  const renameGroup = (from: string, to: string | null) =>
+    run(async () => {
+      await apiFetch(`/api/folders/${folder.id}/groups/rename`, { method: "POST", body: JSON.stringify({ from, to }) });
+      setItems((prev) => prev.map((i) => (i.group === from ? { ...i, group: to } : i)));
+      setGroups((prev) => prev.filter((g) => g !== from));
+      rememberGroup(to);
     });
 
   // Optimistic: flip the tick at once, then undo it if the server says no.
@@ -109,6 +131,8 @@ export default function FolderView() {
   }
 
   const doneCount = items.filter((i) => i.done).length;
+  const totals = computeTotals(items);
+  const sections = groupItems(items);
 
   return (
     <div>
@@ -125,7 +149,7 @@ export default function FolderView() {
 
       {folder.canEdit && (
         <div className="card mb-6">
-          <ItemForm submitLabel="Add" onSubmit={addItem} />
+          <ItemForm submitLabel="Add" groups={groups} onSubmit={addItem} />
         </div>
       )}
 
@@ -134,19 +158,47 @@ export default function FolderView() {
       {items.length === 0 ? (
         <p className="card text-muted">No items yet.{folder.canEdit && " Add your first one above."}</p>
       ) : (
-        <ul className="flex flex-col gap-2">
-          {items.map((item) => (
-            <ItemRow
-              key={item.id}
-              item={item}
-              canCheck={folder.canCheck}
+        <div className="flex flex-col gap-6">
+          {sections.map(([key, sectionItems]) => (
+            <GroupSection
+              key={key || "__ungrouped"}
+              name={key || null}
+              done={sectionItems.filter((i) => i.done).length}
+              total={sectionItems.length}
               canEdit={folder.canEdit}
-              onToggle={() => toggleItem(item)}
-              onSave={(values) => saveItem(item, values)}
-              onDelete={() => deleteItem(item)}
-            />
+              onRename={(to) => renameGroup(key, to)}
+            >
+              {sectionItems.map((item) => (
+                <ItemRow
+                  key={item.id}
+                  item={item}
+                  groups={groups}
+                  canCheck={folder.canCheck}
+                  canEdit={folder.canEdit}
+                  onToggle={() => toggleItem(item)}
+                  onSave={(values) => saveItem(item, values)}
+                  onDelete={() => deleteItem(item)}
+                />
+              ))}
+            </GroupSection>
           ))}
-        </ul>
+
+          <div className="card flex flex-wrap justify-between gap-4">
+            <div>
+              <p className="text-sm text-muted">Total</p>
+              <p className="text-xl font-semibold text-primary">{formatRupees(totals.total)}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted">Remaining (not ticked)</p>
+              <p className="text-xl font-semibold text-accent">{formatRupees(totals.remaining)}</p>
+            </div>
+            {totals.unpriced > 0 && (
+              <p className="w-full text-xs text-muted">
+                {totals.unpriced} {totals.unpriced === 1 ? "item has" : "items have"} no price and {totals.unpriced === 1 ? "is" : "are"} not counted.
+              </p>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

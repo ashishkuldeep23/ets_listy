@@ -13,7 +13,7 @@ type Ctx = RouteContext<"/api/folders/[id]/items/[itemId]">;
 
 const NOT_FOUND = "Item not found";
 
-// PATCH /api/folders/:id/items/:itemId: any of { name, category, price, description }; null clears a field.
+// PATCH /api/folders/:id/items/:itemId: any of { name, category, price, description, group }; null clears a field.
 export async function PATCH(request: Request, ctx: Ctx): Promise<Response> {
   try {
     const user = await requireUser(request);

@@ -3,7 +3,7 @@
 // Form for adding or editing an item. Only the name is required; the other
 // fields show behind "More details" to keep quick adds fast.
 
-import { useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 import { LIMITS } from "@/lib/limits";
 import type { ItemDTO } from "@/types";
 
@@ -13,24 +13,31 @@ export interface ItemFormValues {
   category: string | null;
   price: number | null;
   description: string | null;
+  group: string | null;
 }
 
 interface ItemFormProps {
   /** Pre-fill for editing; omit for a new item. */
-  initial?: Pick<ItemDTO, "name" | "category" | "price" | "description">;
+  initial?: Pick<ItemDTO, "name" | "category" | "price" | "description" | "group">;
+  /** Existing group names in this folder, offered as suggestions. */
+  groups?: string[];
   submitLabel: string;
   /** Return true when saved, so the form can reset. */
   onSubmit: (values: ItemFormValues) => Promise<boolean>;
   onCancel?: () => void;
 }
 
-export default function ItemForm({ initial, submitLabel, onSubmit, onCancel }: ItemFormProps) {
+export default function ItemForm({ initial, groups = [], submitLabel, onSubmit, onCancel }: ItemFormProps) {
+  const groupListId = useId();
   const [name, setName] = useState(initial?.name ?? "");
   const [category, setCategory] = useState(initial?.category ?? "");
   const [price, setPrice] = useState(initial?.price != null ? String(initial.price) : "");
   const [description, setDescription] = useState(initial?.description ?? "");
+  const [group, setGroup] = useState(initial?.group ?? "");
   // Editing an item that already has details: show them straight away.
-  const [showMore, setShowMore] = useState(Boolean(initial?.category || initial?.price != null || initial?.description));
+  const [showMore, setShowMore] = useState(
+    Boolean(initial?.category || initial?.price != null || initial?.description || initial?.group)
+  );
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -51,6 +58,7 @@ export default function ItemForm({ initial, submitLabel, onSubmit, onCancel }: I
       category: category.trim() || null,
       price: priceNumber,
       description: description.trim() || null,
+      group: group.trim() || null,
     });
     setBusy(false);
 
@@ -59,6 +67,7 @@ export default function ItemForm({ initial, submitLabel, onSubmit, onCancel }: I
       setCategory("");
       setPrice("");
       setDescription("");
+      // Keep the group: people usually add several items to the same group in a row.
     }
   }
 
@@ -86,6 +95,19 @@ export default function ItemForm({ initial, submitLabel, onSubmit, onCancel }: I
 
       {showMore ? (
         <div className="grid gap-2 sm:grid-cols-2">
+          <input
+            value={group}
+            onChange={(e) => setGroup(e.target.value)}
+            placeholder="Group (optional, e.g. Vegetables)"
+            maxLength={LIMITS.ITEM_GROUP_MAX}
+            list={groupListId}
+            className="input"
+          />
+          <datalist id={groupListId}>
+            {groups.map((g) => (
+              <option key={g} value={g} />
+            ))}
+          </datalist>
           <input
             value={category}
             onChange={(e) => setCategory(e.target.value)}
@@ -115,7 +137,7 @@ export default function ItemForm({ initial, submitLabel, onSubmit, onCancel }: I
         </div>
       ) : (
         <button type="button" onClick={() => setShowMore(true)} className="link self-start text-sm">
-          + More details (category, price, description)
+          + More details (group, category, price, description)
         </button>
       )}
 

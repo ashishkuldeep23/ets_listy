@@ -11,7 +11,7 @@ type Ctx = RouteContext<"/api/folders/[id]/items">;
 
 const NOT_FOUND = "Folder not found";
 
-// GET /api/folders/:id/items → { items, total, done }. Any access may read.
+// GET /api/folders/:id/items → { items, total, done, groups }. Any access may read.
 export async function GET(request: Request, ctx: Ctx): Promise<Response> {
   try {
     const user = await requireUser(request);
@@ -22,18 +22,23 @@ export async function GET(request: Request, ctx: Ctx): Promise<Response> {
     if (!access) return jsonError(NOT_FOUND, 404);
 
     const folderId = access.folder._id;
-    const [items, counts] = await Promise.all([
+    const [items, counts, groups] = await Promise.all([
       Item.find({ folder: folderId }).sort({ position: 1 }).populate(DONE_BY_NAME).lean<ItemDoc[]>(),
       countItems(folderId),
+      Item.distinct("group", { folder: folderId, group: { $nin: [null, ""] } }),
     ]);
-    const body: ItemListResponse = { items: items.map(serializeItem), ...counts };
+    const body: ItemListResponse = {
+      items: items.map(serializeItem),
+      ...counts,
+      groups: (groups as string[]).sort((a, b) => a.localeCompare(b)),
+    };
     return Response.json(body);
   } catch (err) {
     return serverError(err);
   }
 }
 
-// POST /api/folders/:id/items: { name, category?, price?, description? }. Needs canEdit.
+// POST /api/folders/:id/items: { name, category?, price?, description?, group? }. Needs canEdit.
 export async function POST(request: Request, ctx: Ctx): Promise<Response> {
   try {
     const user = await requireUser(request);
