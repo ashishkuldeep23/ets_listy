@@ -7,6 +7,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import LiveDot from "@/components/LiveDot";
 import type { SessionUser } from "@/types";
 
 export default function Header() {
@@ -38,6 +39,7 @@ export default function Header() {
         Listy
       </Link>
       <div className="flex items-center gap-3 text-sm">
+        <LiveDot />
         {user && (
           <Link href="/profile" className="text-muted hover:text-fg" title="Profile and saved items">
             Hi, <span className="text-accent">{user.name}</span>

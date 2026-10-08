@@ -1,6 +1,10 @@
 // Browser-side fetch wrapper for our own API: sends JSON, and turns
 // { error } responses into thrown ApiErrors with that message.
-// All UI writes should go through this (Phase 4 adds a Pusher header here).
+// All UI calls go through this. Writes also send this tab's Pusher socket
+// id, so the server can skip echoing our own change back to us.
+
+import { SOCKET_ID_HEADER } from "@/lib/channels";
+import { getSocketId } from "@/lib/pusherClient";
 
 export class ApiError extends Error {
   constructor(
@@ -13,9 +17,15 @@ export class ApiError extends Error {
 
 /** Fetches `path` and returns the parsed JSON as `T` (null for 204). */
 export async function apiFetch<T = unknown>(path: string, options: RequestInit = {}): Promise<T> {
+  const isWrite = (options.method ?? "GET").toUpperCase() !== "GET";
+  const socketId = isWrite ? getSocketId() : undefined;
   const res = await fetch(path, {
     ...options,
-    headers: { ...(options.body ? { "Content-Type": "application/json" } : {}), ...options.headers },
+    headers: {
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      ...(socketId && { [SOCKET_ID_HEADER]: socketId }),
+      ...options.headers,
+    },
   });
   const data: unknown = res.status === 204 ? null : await res.json().catch(() => ({}));
   if (!res.ok) {

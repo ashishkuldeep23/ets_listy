@@ -31,7 +31,8 @@ npm run build   # production build (type-checks too): run before calling work do
 ```
 
 Setup: copy `.env.example` to `.env.local` and set `MONGODB_URI` and
-`SESSION_SECRET`.
+`SESSION_SECRET`. The four Pusher vars are optional: without them the app
+works with no live updates.
 
 Feature prompts for upcoming work live in `prompts/` (start with
 `prompts/README.md` and `prompts/_common.md`).
@@ -58,6 +59,7 @@ src/
     api/folders/[id]/share-link/route.ts         # GET, POST { canCheck, canEdit, enabled } (canManage)
     api/folders/[id]/share-link/reset/route.ts   # POST: new token (canManage)
     api/share/[token]/accept/route.ts            # POST: join via link (logged in, rate-limited)
+    api/pusher/auth/route.ts                     # private channel auth (folder: getFolderAccess, user: self)
     share/[token]/page.tsx   # opens a share link (components/AcceptShare.tsx)
     api/saved-items/route.ts                     # GET ?q= (my saved items), POST (upsert)
     api/saved-items/[id]/route.ts                # PATCH (409 on duplicate), DELETE
@@ -76,9 +78,11 @@ src/
     SharePanel.tsx           # owner: share by email, people + permissions
     PermissionCheckboxes.tsx # View (always) / Can tick / Can edit
     AcceptShare.tsx          # /share/[token] body
+    LiveDot.tsx              # header "Live" indicator (hidden if Pusher is off)
     ProfileView.tsx          # profile page body
   hooks/
     useSavedItems.ts         # debounced saved-items search, shared by picker + profile
+    useChannel.ts            # subscribe to a Pusher channel while mounted (+ refetch after reconnect)
   lib/
     db.ts          # cached Mongoose connection: always use connectDB()
     session.ts     # sign/verify session JWT (jose); no DB, used by proxy.ts
@@ -89,6 +93,9 @@ src/
     apiClient.ts   # apiFetch<T>() + ApiError: browser fetch wrapper, use for all UI calls
     items.ts       # toItemUpdate() (null → $unset), countItems(), countItemsByFolder()
     format.ts      # formatRupees()
+    channels.ts    # Pusher channel + event names (shared by server and browser)
+    realtime.ts    # server: publishFolderEvent / publishUserEvent (never throw, no-op without keys)
+    pusherClient.ts # browser: shared pusher-js client, getSocketId()
     totals.ts      # computeTotals() (in paise), groupItems() (A–Z, ungrouped last)
     savedItems.ts  # upsertSavedItem() (no duplicates, limit), updateSavedItem(), escapeRegex()
     rateLimit.ts   # in-memory rate limiter (per process only)
@@ -182,9 +189,14 @@ src/
    (null → 404, missing flag → 403). Item queries always filter by the
    folder from the URL too, so an item can't be reached through another folder. Send API data through `serialize*()`
    helpers so internal fields (like `owner`) don't leak.
-8. Run `npm audit --omit=dev` after adding dependencies and report any
+8. **Realtime events** are published only AFTER a successful DB write, via
+   `lib/realtime.ts`, and carry only what the UI shows (never emails or
+   hashes). Only `private-` channels; `/api/pusher/auth` must check access
+   with `getFolderAccess()`. `PUSHER_SECRET` is server-only. Tests mock the
+   `pusher` module (see `withPusherEnv()` in `src/test/setup.ts`).
+9. Run `npm audit --omit=dev` after adding dependencies and report any
    production vulnerabilities.
-9. Security headers are set in `next.config.mjs`. Do not remove them.
+10. Security headers are set in `next.config.ts`. Do not remove them.
 
 Before finishing any task that touches the API, re-read rules 1–6 against
 the changed code.

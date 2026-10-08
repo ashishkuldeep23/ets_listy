@@ -1,7 +1,8 @@
 import mongoose from "mongoose";
 import { MongoMemoryServer } from "mongodb-memory-server";
-import { afterAll, beforeAll, beforeEach } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach } from "vitest";
 import { resetRateLimits } from "@/lib/rateLimit";
+import { resetRealtimeForTests } from "@/lib/realtime";
 import { POST as signup } from "@/app/api/auth/signup/route";
 import type { SessionUser } from "@/types";
 
@@ -78,4 +79,26 @@ export async function createUserAndCookie({
   const cookie = sessionCookieFrom(res);
   if (!cookie) throw new Error("signup did not set a session cookie");
   return { user: await json<SessionUser>(res), cookie };
+}
+
+/**
+ * Turns "Pusher configured" on for each test in this file (fake keys) and
+ * off afterwards. The `pusher` module itself must be mocked in the test file
+ * with vi.mock, so nothing ever reaches the real service.
+ */
+export function withPusherEnv(): void {
+  const keys = {
+    PUSHER_APP_ID: "test-app",
+    PUSHER_SECRET: "test-secret",
+    NEXT_PUBLIC_PUSHER_KEY: "test-key",
+    NEXT_PUBLIC_PUSHER_CLUSTER: "ap2",
+  };
+  beforeEach(() => {
+    Object.assign(process.env, keys);
+    resetRealtimeForTests();
+  });
+  afterEach(() => {
+    for (const k of Object.keys(keys)) delete process.env[k];
+    resetRealtimeForTests();
+  });
 }
