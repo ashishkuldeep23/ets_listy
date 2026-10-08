@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+/*
+  Listy theme: dark only.
+  Primary = golden (main actions), Accent = cyan (links, focus, highlights).
+  Every colour lives here as a token; components use the Tailwind classes
+  these generate (bg-primary, text-accent, border-border, …), never raw hex
+  values, so the whole theme can be changed from this one file.
+*/
+@theme {
+  --color-bg: #0b0d10;          /* page background */
+  --color-surface: #14171c;     /* cards, inputs, header */
+  --color-surface-2: #1c2027;   /* hover / raised surface */
+  --color-border: #2a2f37;
+  --color-fg: #ece9e2;          /* main text */
+  --color-muted: #9aa1ab;       /* secondary text */
+
+  --color-primary: #d4a72c;     /* golden */
+  --color-primary-hover: #e8bd4a;
+  --color-on-primary: #1a1405;  /* text on golden buttons */
+
+  --color-accent: #22d3ee;      /* cyan */
+  --color-accent-hover: #67e8f9;
+
+  --color-danger: #f87171;
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html {
+  /* Tells the browser to draw native controls (checkboxes, scrollbars) dark. */
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* Shared building blocks, so every page looks the same. */
+@layer components {
+  .btn-primary {
+    @apply rounded-md bg-primary px-4 py-2 font-medium text-on-primary transition-colors hover:bg-primary-hover disabled:opacity-50;
+  }
+  .btn-secondary {
+    @apply rounded-md border border-accent px-3 py-1.5 text-accent transition-colors hover:bg-accent/10 disabled:opacity-50;
+  }
+  .btn-ghost {
+    @apply rounded-md border border-border px-3 py-1.5 text-fg transition-colors hover:bg-surface-2 disabled:opacity-50;
+  }
+  .input {
+    @apply rounded-md border border-border bg-surface px-3 py-2 text-fg placeholder:text-muted outline-none focus:border-accent focus:ring-1 focus:ring-accent;
+  }
+  .card {
+    @apply rounded-lg border border-border bg-surface p-4;
+  }
+  .link {
+    @apply text-accent underline-offset-4 hover:text-accent-hover hover:underline;
+  }
+}

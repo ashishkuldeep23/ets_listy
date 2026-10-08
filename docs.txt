@@ -1,0 +1,29 @@
+
+features -------------------------------------->>>>>>>>>>
+
+ab main phases decide krna chahuga, mai main features bata ta hu tum ushe phases me break kro fron phase 1 to 4 
+
+user login and signin
+user able to CRUS floder (like oct, spet, market, home, etc) (this will contain list, so it is folder name)
+
+User able to crud list (inside folder user able to create list that he/she wants to create under this folder.    also they can group some lists inside folder)
+
+After folder created and some list saved into this folder user able to share this list to other users, so they can see this folder and in their profile under shared list and also by visiting the url other user able to see this folder and all list present under it 
+
+Once user sharing any folder  give some options like read only(always tick) , edit list, with check box and some other options will decide later. Kishne share Kiya uski I'd mention honi chahiye with name 
+
+Folder ke do ya aur bhi future me mode ho, jaise active, completed, pending and other. To ishke liye ek lable laga ho folder me aur user filter bhi kr paye aise 
+
+Pushser js ka use Krna chahuga agr check list tick krke share Kiya gaya hai to, kaise ho second user ush product ya list ke age tick kre, 1st user ke account me hi wo data reflect hona chahiye, taki 1st ko bhi ata chalta rhe kitni list complete huyi aise krke.
+
+
+
+
+List add krte time jo bhi ui ho usme ek option so user ko save into your profile krke agr ye tick hoga to wo list item user ke main list me bhi save ho jaye, joki user kisi new folder me list add krte time add btn pr click krke add from your saved list option se sara list show hone pr, item pr click krke hi add kr sake (yaha pr and update and add ka option ho jish se list me kuch change krte huye new list me add kr skte )
+
+
+
+List  add krte time kuch option ana jaruri hai jaise list name, list category, list price , list discription and other. Only name is necessary rest are optional
+
+
+Sirf phase me divide kro aur prompts folder me phase vise features banane ke liye prompt banao, jish se ki mai sirf prompt paste krke hi pura feature bana ka test ho jaye aur bn mujhe remote pr check krne ho bs 
