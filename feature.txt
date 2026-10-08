@@ -27,3 +27,30 @@ List  add krte time kuch option ana jaruri hai jaise list name, list category, l
 
 
 Sirf phase me divide kro aur prompts folder me phase vise features banane ke liye prompt banao, jish se ki mai sirf prompt paste krke hi pura feature bana ka test ho jaye aur bn mujhe remote pr check krne ho bs 
+
+
+
+---------------------------------------->>>>>>>>>>>>>>>>>>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
