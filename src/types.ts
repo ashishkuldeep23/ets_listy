@@ -62,9 +62,28 @@ export interface ShareDTO {
   via: "email" | "link";
 }
 
+/** A folder's share link, as the owner sees it. */
+export interface ShareLinkDTO {
+  url: string;
+  canCheck: boolean;
+  canEdit: boolean;
+  enabled: boolean;
+}
+
 /** GET /api/folders/:id/shares */
 export interface ShareListResponse {
   shares: ShareDTO[];
+  link: ShareLinkDTO | null;
+}
+
+/** GET / POST /api/folders/:id/share-link */
+export interface ShareLinkResponse {
+  link: ShareLinkDTO | null;
+}
+
+/** POST /api/share/:token/accept */
+export interface AcceptShareResponse {
+  folderId: string;
 }
 
 /** An item inside a folder. Optional fields are null when not set. */

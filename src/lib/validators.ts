@@ -344,3 +344,21 @@ export function validateSharePermissions(body: unknown): Result<SharePermissions
   if (Object.keys(value).length === 0) return fail("nothing to update");
   return { ok: true, value };
 }
+
+export interface ShareLinkInput extends SharePermissionsInput {
+  enabled?: boolean;
+}
+
+/** Body for POST /api/folders/:id/share-link: { canCheck?, canEdit?, enabled? } (all optional). */
+export function validateShareLink(body: unknown): Result<ShareLinkInput> {
+  if (body === undefined || body === null) return { ok: true, value: {} };
+  if (!isPlainObject(body)) return fail("body must be a JSON object");
+  const value: ShareLinkInput = {};
+  const error = readPermissions(body, value);
+  if (error) return fail(error);
+  if (body.enabled !== undefined) {
+    if (typeof body.enabled !== "boolean") return fail("enabled must be true or false");
+    value.enabled = body.enabled;
+  }
+  return { ok: true, value };
+}

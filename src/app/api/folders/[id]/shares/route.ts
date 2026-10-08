@@ -1,6 +1,6 @@
 import { requireUser } from "@/lib/auth";
 import { getFolderAccess } from "@/lib/access";
-import { listShares } from "@/lib/shares";
+import { getShareLink, listShares } from "@/lib/shares";
 import { LIMITS } from "@/lib/limits";
 import { rateLimit } from "@/lib/rateLimit";
 import { validateCreateShare } from "@/lib/validators";
@@ -14,7 +14,7 @@ import type { ShareListResponse } from "@/types";
 
 type Ctx = RouteContext<"/api/folders/[id]/shares">;
 
-// GET /api/folders/:id/shares → { shares }
+// GET /api/folders/:id/shares → { shares, link }
 export async function GET(request: Request, ctx: Ctx): Promise<Response> {
   try {
     const user = await requireUser(request);
@@ -25,14 +25,16 @@ export async function GET(request: Request, ctx: Ctx): Promise<Response> {
     if (!access) return jsonError("Folder not found", 404);
     if (!access.canManage) return jsonError("Only the owner can see who this folder is shared with", 403);
 
-    const body: ShareListResponse = { shares: await listShares(access.folder._id) };
+    const origin = new URL(request.url).origin;
+    const [shares, link] = await Promise.all([listShares(access.folder._id), getShareLink(access.folder._id, origin)]);
+    const body: ShareListResponse = { shares, link };
     return Response.json(body);
   } catch (err) {
     return serverError(err);
   }
 }
 
-// POST /api/folders/:id/shares: { email, canCheck?, canEdit? } → { shares }.
+// POST /api/folders/:id/shares: { email, canCheck?, canEdit? } → { shares, link }.
 // Sharing again with the same person just updates their permissions.
 export async function POST(request: Request, ctx: Ctx): Promise<Response> {
   try {
@@ -75,7 +77,10 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
       { upsert: true }
     );
 
-    const res: ShareListResponse = { shares: await listShares(folderId) };
+    const res: ShareListResponse = {
+      shares: await listShares(folderId),
+      link: await getShareLink(folderId, new URL(request.url).origin),
+    };
     return Response.json(res, { status: existing ? 200 : 201 });
   } catch (err) {
     return serverError(err);

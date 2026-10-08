@@ -1,7 +1,8 @@
 import type { Types } from "mongoose";
 import { Share, type IShare } from "@/models/Share";
 import { User } from "@/models/User";
-import type { ShareDTO } from "@/types";
+import { ShareLink, type IShareLink } from "@/models/ShareLink";
+import type { ShareDTO, ShareLinkDTO } from "@/types";
 
 // Helpers for the share routes.
 
@@ -28,4 +29,20 @@ export async function listShares(folderId: Types.ObjectId): Promise<ShareDTO[]> 
       },
     ];
   });
+}
+
+/** The share link as the owner sees it. The URL uses the origin the request came in on. */
+export function serializeShareLink(link: IShareLink, origin: string): ShareLinkDTO {
+  return {
+    url: `${origin}/share/${link.token}`,
+    canCheck: link.canCheck || link.canEdit,
+    canEdit: link.canEdit,
+    enabled: link.enabled,
+  };
+}
+
+/** A folder's link for the owner view, or null if none was ever created. */
+export async function getShareLink(folderId: Types.ObjectId, origin: string): Promise<ShareLinkDTO | null> {
+  const link = await ShareLink.findOne({ folder: folderId }).lean();
+  return link ? serializeShareLink(link, origin) : null;
 }

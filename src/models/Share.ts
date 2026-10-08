@@ -45,7 +45,21 @@ shareSchema.pre("save", function () {
 export const Share: Model<IShare> =
   (mongoose.models.Share as Model<IShare> | undefined) ?? mongoose.model<IShare>("Share", shareSchema);
 
+export interface PermissionFlags {
+  canCheck: boolean;
+  canEdit: boolean;
+}
+
 /** Edit includes tick. Use this whenever permissions are written. */
-export function normalizePermissions(canCheck: boolean, canEdit: boolean): { canCheck: boolean; canEdit: boolean } {
+export function normalizePermissions(canCheck: boolean, canEdit: boolean): PermissionFlags {
   return { canCheck: canCheck || canEdit, canEdit };
+}
+
+/**
+ * Applies a partial change to current flags. Turning tick off also turns
+ * edit off (edit can't exist without tick); turning edit on turns tick on.
+ */
+export function mergePermissions(current: PermissionFlags, change: Partial<PermissionFlags>): PermissionFlags {
+  if (change.canCheck === false) return { canCheck: false, canEdit: false };
+  return normalizePermissions(change.canCheck ?? current.canCheck, change.canEdit ?? current.canEdit);
 }

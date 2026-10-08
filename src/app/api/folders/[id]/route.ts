@@ -5,6 +5,7 @@ import { jsonError, readJson, serverError } from "@/lib/http";
 import { Folder, serializeFolder } from "@/models/Folder";
 import { Item } from "@/models/Item";
 import { Share } from "@/models/Share";
+import { ShareLink } from "@/models/ShareLink";
 import type { FolderDetailDTO } from "@/types";
 
 type Ctx = RouteContext<"/api/folders/[id]">;
@@ -71,9 +72,9 @@ export async function DELETE(request: Request, ctx: Ctx): Promise<Response> {
     if (!access.canManage) return jsonError("Only the owner can delete this folder", 403);
 
     // Delete everything that belongs to the folder, so nothing is left orphaned.
-    // LATER (Phase 3.2): also delete its share link here.
     await Item.deleteMany({ folder: access.folder._id });
     await Share.deleteMany({ folder: access.folder._id });
+    await ShareLink.deleteMany({ folder: access.folder._id });
     await Folder.deleteOne({ _id: access.folder._id });
     return new Response(null, { status: 204 });
   } catch (err) {

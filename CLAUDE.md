@@ -55,6 +55,10 @@ src/
     api/folders/[id]/groups/rename/route.ts      # POST { from, to } (canEdit)
     api/folders/[id]/shares/route.ts             # GET, POST { email, canCheck, canEdit } (canManage)
     api/folders/[id]/shares/[userId]/route.ts    # PATCH perms, DELETE (canManage)
+    api/folders/[id]/share-link/route.ts         # GET, POST { canCheck, canEdit, enabled } (canManage)
+    api/folders/[id]/share-link/reset/route.ts   # POST: new token (canManage)
+    api/share/[token]/accept/route.ts            # POST: join via link (logged in, rate-limited)
+    share/[token]/page.tsx   # opens a share link (components/AcceptShare.tsx)
     api/saved-items/route.ts                     # GET ?q= (my saved items), POST (upsert)
     api/saved-items/[id]/route.ts                # PATCH (409 on duplicate), DELETE
     profile/page.tsx         # my profile + saved items (components/ProfileView.tsx)
@@ -71,6 +75,7 @@ src/
     SavedItemPicker.tsx      # "Add from saved" panel (Add / Edit & add)
     SharePanel.tsx           # owner: share by email, people + permissions
     PermissionCheckboxes.tsx # View (always) / Can tick / Can edit
+    AcceptShare.tsx          # /share/[token] body
     ProfileView.tsx          # profile page body
   hooks/
     useSavedItems.ts         # debounced saved-items search, shared by picker + profile
@@ -79,7 +84,7 @@ src/
     session.ts     # sign/verify session JWT (jose); no DB, used by proxy.ts
     auth.ts        # hashPassword, getSessionUser, requireUser, session cookie
     access.ts      # getFolderAccess(): the ONLY folder permission check (owner or Share row)
-    shares.ts      # listShares() for the owner view
+    shares.ts      # listShares(), getShareLink(), serializeShareLink() for the owner view
     constants.ts   # FOLDER_STATUSES: add new statuses here only
     apiClient.ts   # apiFetch<T>() + ApiError: browser fetch wrapper, use for all UI calls
     items.ts       # toItemUpdate() (null → $unset), countItems(), countItemsByFolder()
@@ -96,7 +101,8 @@ src/
     Folder.ts      # + serializeFolder(), statusFilter() (missing status = active)
     Item.ts        # + serializeItem(); populate DONE_BY_NAME for doneBy (name only)
     SavedItem.ts   # private per user; unique owner+nameKey+categoryKey (case-insensitive)
-    Share.ts       # folder + sharedWith (unique), canCheck/canEdit; normalizePermissions()
+    Share.ts       # folder + sharedWith (unique), canCheck/canEdit; normalize/mergePermissions()
+    ShareLink.ts   # one per folder; random 32-char token (newShareToken), enabled flag
   test/
     setup.ts       # setupTestDb(), makeRequest(), routeCtx(), json<T>(), createUserAndCookie()
 ```

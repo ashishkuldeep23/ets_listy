@@ -1,10 +1,10 @@
 import mongoose from "mongoose";
 import { requireUser } from "@/lib/auth";
 import { getFolderAccess } from "@/lib/access";
-import { listShares } from "@/lib/shares";
+import { getShareLink, listShares } from "@/lib/shares";
 import { validateSharePermissions } from "@/lib/validators";
 import { jsonError, readJson, serverError } from "@/lib/http";
-import { Share, normalizePermissions } from "@/models/Share";
+import { Share, mergePermissions } from "@/models/Share";
 import type { ShareListResponse } from "@/types";
 
 // Change or remove one person's access to a folder.
@@ -13,7 +13,7 @@ type Ctx = RouteContext<"/api/folders/[id]/shares/[userId]">;
 
 const NOT_FOUND = "Share not found";
 
-// PATCH /api/folders/:id/shares/:userId: { canCheck?, canEdit? } → { shares }. Owner only.
+// PATCH /api/folders/:id/shares/:userId: { canCheck?, canEdit? } → { shares, link }. Owner only.
 export async function PATCH(request: Request, ctx: Ctx): Promise<Response> {
   try {
     const user = await requireUser(request);
@@ -33,14 +33,13 @@ export async function PATCH(request: Request, ctx: Ctx): Promise<Response> {
     const share = await Share.findOne({ folder: access.folder._id, sharedWith: userId });
     if (!share) return jsonError(NOT_FOUND, 404);
 
-    // Merge with the current flags, then make sure edit still includes tick.
-    const next = normalizePermissions(result.value.canCheck ?? share.canCheck, result.value.canEdit ?? share.canEdit);
-    // Turning tick off also turns edit off (edit can't exist without tick).
-    if (result.value.canCheck === false) next.canEdit = next.canCheck = false;
-    share.set(next);
+    share.set(mergePermissions(share, result.value));
     await share.save();
 
-    const res: ShareListResponse = { shares: await listShares(access.folder._id) };
+    const res: ShareListResponse = {
+      shares: await listShares(access.folder._id),
+      link: await getShareLink(access.folder._id, new URL(request.url).origin),
+    };
     return Response.json(res);
   } catch (err) {
     return serverError(err);

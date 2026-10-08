@@ -21,6 +21,20 @@ export async function readJson(request: Request): Promise<unknown> {
 }
 
 /**
+ * Like readJson, but an empty body is allowed and returns null (for routes
+ * where every field is optional). Invalid JSON still returns undefined.
+ */
+export async function readOptionalJson(request: Request): Promise<unknown> {
+  const text = await request.text();
+  if (!text.trim()) return null;
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Last-resort handler for unexpected errors. Logs the real error on the
  * server but sends only a generic message — stack traces and DB details
  * must never reach the client.
