@@ -208,16 +208,24 @@ export interface CreateItemInput extends ItemFieldsInput {
   name: string;
 }
 
-/** Body for POST /api/folders/:id/items: { name, category?, price?, description?, group? }. */
-export function validateCreateItem(body: unknown): Result<CreateItemInput> {
+/**
+ * Body for POST /api/folders/:id/items:
+ * { name, category?, price?, description?, group?, saveToProfile? }.
+ * `saveToProfile` is returned separately because it is not an item field.
+ */
+export function validateCreateItem(body: unknown): Result<{ fields: CreateItemInput; saveToProfile: boolean }> {
   if (!isPlainObject(body)) return fail("body must be a JSON object");
   const name = cleanItemName(body.name);
   if (name.error !== undefined) return fail(name.error);
 
-  const value: CreateItemInput = { name: name.value };
-  const error = readOptionalItemFields(body, value);
+  const fields: CreateItemInput = { name: name.value };
+  const error = readOptionalItemFields(body, fields);
   if (error) return fail(error);
-  return { ok: true, value };
+
+  if (body.saveToProfile !== undefined && typeof body.saveToProfile !== "boolean") {
+    return fail("saveToProfile must be true or false");
+  }
+  return { ok: true, value: { fields, saveToProfile: body.saveToProfile === true } };
 }
 
 /** Body for PATCH /api/folders/:id/items/:itemId: any item field, at least one. */
@@ -257,4 +265,37 @@ export function validateRenameGroup(body: unknown): Result<RenameGroupInput> {
   const to = cleanOptionalText(body.to ?? null, "to", LIMITS.ITEM_GROUP_MAX);
   if (to.error !== undefined) return fail(to.error);
   return { ok: true, value: { from: from.value, to: to.value ?? null } };
+}
+
+/* ---------- saved items ---------- */
+
+/** Saved items have the same fields as items, except `group` (that belongs to a folder). */
+export type SavedItemFieldsInput = Omit<ItemFieldsInput, "group">;
+export interface CreateSavedItemInput extends SavedItemFieldsInput {
+  name: string;
+}
+
+/** Drops `group` from item fields (e.g. before saving them to the profile). */
+export function withoutGroup<T extends { group?: unknown }>(fields: T): Omit<T, "group"> {
+  const rest: T = { ...fields };
+  delete rest.group;
+  return rest;
+}
+
+/** Body for POST /api/saved-items: { name, category?, price?, description? }. */
+export function validateCreateSavedItem(body: unknown): Result<CreateSavedItemInput> {
+  const r = validateCreateItem(body);
+  return r.ok ? { ok: true, value: withoutGroup(r.value.fields) } : r;
+}
+
+/** Body for PATCH /api/saved-items/:id: any saved-item field, at least one. */
+export function validateUpdateSavedItem(body: unknown): Result<SavedItemFieldsInput> {
+  const r = validateUpdateItem(isPlainObject(body) ? withoutGroup(body) : body);
+  return r.ok ? { ok: true, value: withoutGroup(r.value) } : r;
+}
+
+/** ?q= search text: trimmed, capped, empty → null. */
+export function cleanSearchQuery(q: string | null): string | null {
+  const t = q?.trim().slice(0, LIMITS.SEARCH_QUERY_MAX);
+  return t ? t : null;
 }

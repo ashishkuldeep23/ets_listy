@@ -1,7 +1,8 @@
 "use client";
 
 // Folder page body: the folder header, progress, its items grouped into
-// sections (add, edit, tick, delete, rename a group) and price totals. Loads the folder by the id in the URL; the API answers 404
+// sections (add, edit, tick, delete, rename a group), price totals, and
+// "Add from saved" to reuse items from my profile. Loads the folder by the id in the URL; the API answers 404
 // for folders that don't exist or aren't mine, shown as "not found".
 // What the user may do (tick / edit) comes from the API, not guessed here.
 
@@ -12,11 +13,12 @@ import GroupSection from "@/components/GroupSection";
 import ItemForm, { type ItemFormValues } from "@/components/ItemForm";
 import ItemRow from "@/components/ItemRow";
 import ProgressBar from "@/components/ProgressBar";
+import SavedItemPicker from "@/components/SavedItemPicker";
 import StatusBadge from "@/components/StatusBadge";
 import { ApiError, apiFetch } from "@/lib/apiClient";
 import { formatRupees } from "@/lib/format";
 import { computeTotals, groupItems } from "@/lib/totals";
-import type { FolderDetailDTO, ItemDTO, ItemListResponse } from "@/types";
+import type { FolderDetailDTO, ItemDTO, ItemListResponse, SavedItemDTO } from "@/types";
 
 type LoadState = "loading" | "ready" | "notFound" | "error";
 
@@ -27,6 +29,9 @@ export default function FolderView() {
   const [groups, setGroups] = useState<string[]>([]);
   const [state, setState] = useState<LoadState>("loading");
   const [error, setError] = useState("");
+  const [showPicker, setShowPicker] = useState(false);
+  // A saved item loaded into the add form by "Edit & add". `key` remounts the form with it.
+  const [prefill, setPrefill] = useState<{ key: number; item: SavedItemDTO } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -92,7 +97,12 @@ export default function FolderView() {
       const item = await apiFetch<ItemDTO>(itemsUrl, { method: "POST", body: JSON.stringify(values) });
       setItems((prev) => [...prev, item]);
       rememberGroup(item.group);
+      setPrefill(null);
     });
+
+  // "Add" in the saved-items panel: copy the saved item into this folder as-is.
+  const addFromSaved = (saved: SavedItemDTO, group: string | null) =>
+    addItem({ name: saved.name, category: saved.category, price: saved.price, description: saved.description, group });
 
   const saveItem = (item: ItemDTO, values: ItemFormValues) =>
     run(async () => {
@@ -148,9 +158,33 @@ export default function FolderView() {
       </div>
 
       {folder.canEdit && (
-        <div className="card mb-6">
-          <ItemForm submitLabel="Add" groups={groups} onSubmit={addItem} />
-        </div>
+        <>
+          <div className="card mb-3">
+            <ItemForm
+              key={prefill?.key ?? "new"}
+              initial={prefill?.item}
+              submitLabel="Add"
+              groups={groups}
+              showSaveToProfile
+              onSubmit={addItem}
+            />
+          </div>
+          {showPicker ? (
+            <SavedItemPicker
+              groups={groups}
+              onAdd={addFromSaved}
+              onEditAndAdd={(item) => {
+                setPrefill({ key: Date.now(), item });
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              onClose={() => setShowPicker(false)}
+            />
+          ) : (
+            <button onClick={() => setShowPicker(true)} className="btn-secondary mb-6 text-sm">
+              + Add from saved
+            </button>
+          )}
+        </>
       )}
 
       {error && <p className="mb-4 text-sm text-danger">{error}</p>}

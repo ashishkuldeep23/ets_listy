@@ -1,8 +1,9 @@
 import { requireUser } from "@/lib/auth";
 import { getFolderAccess } from "@/lib/access";
 import { countItems } from "@/lib/items";
+import { upsertSavedItem } from "@/lib/savedItems";
 import { LIMITS } from "@/lib/limits";
-import { validateCreateItem } from "@/lib/validators";
+import { validateCreateItem, withoutGroup } from "@/lib/validators";
 import { jsonError, readJson, serverError } from "@/lib/http";
 import { Item, DONE_BY_NAME, serializeItem, type ItemDoc } from "@/models/Item";
 import type { ItemListResponse } from "@/types";
@@ -38,7 +39,7 @@ export async function GET(request: Request, ctx: Ctx): Promise<Response> {
   }
 }
 
-// POST /api/folders/:id/items: { name, category?, price?, description?, group? }. Needs canEdit.
+// POST /api/folders/:id/items: { name, category?, price?, description?, group?, saveToProfile? }. Needs canEdit.
 export async function POST(request: Request, ctx: Ctx): Promise<Response> {
   try {
     const user = await requireUser(request);
@@ -61,8 +62,17 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
 
     // New items go to the end of the list.
     const last = await Item.findOne({ folder: folderId }).sort({ position: -1 }).select("position").lean();
+    const { fields: input, saveToProfile } = result.value;
+
+    // Save to the CURRENT user's profile (not the folder owner's). Done before
+    // creating the item so a full library fails the request cleanly.
+    if (saveToProfile) {
+      const saved = await upsertSavedItem(user.id, withoutGroup(input));
+      if (!saved) return jsonError(`Your saved items are full (max ${LIMITS.SAVED_ITEMS_PER_USER})`, 400);
+    }
+
     // null fields from the validator mean "empty": just leave them out on create.
-    const fields = Object.fromEntries(Object.entries(result.value).filter(([, v]) => v !== null));
+    const fields = Object.fromEntries(Object.entries(input).filter(([, v]) => v !== null));
 
     const item = await Item.create({
       ...fields,
@@ -75,3 +85,4 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
     return serverError(err);
   }
 }
+

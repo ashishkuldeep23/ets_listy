@@ -9,6 +9,9 @@ import {
   validateToggle,
   validateUpdateFolder,
   validateUpdateItem,
+  validateCreateSavedItem,
+  validateUpdateSavedItem,
+  cleanSearchQuery,
 } from "@/lib/validators";
 import { LIMITS } from "@/lib/limits";
 import { STATUS_VALUES } from "@/lib/constants";
@@ -120,20 +123,20 @@ describe("item validators", () => {
   it("accepts a name with optional fields and trims text", () => {
     expect(validateCreateItem({ name: " Milk ", category: " Dairy ", price: 60.5, description: " 1L " })).toEqual({
       ok: true,
-      value: { name: "Milk", category: "Dairy", price: 60.5, description: "1L" },
+      value: { fields: { name: "Milk", category: "Dairy", price: 60.5, description: "1L" }, saveToProfile: false },
     });
   });
 
   it("treats empty optional text as null and drops unknown fields", () => {
     expect(validateCreateItem({ name: "Milk", category: "  ", done: true, folder: "x" })).toEqual({
       ok: true,
-      value: { name: "Milk", category: null },
+      value: { fields: { name: "Milk", category: null }, saveToProfile: false },
     });
   });
 
   it("rounds price to paise", () => {
     const r = validateCreateItem({ name: "A", price: 0.1 + 0.2 });
-    expect(r.ok && r.value.price).toBe(0.3);
+    expect(r.ok && r.value.fields.price).toBe(0.3);
   });
 
   it("rejects bad prices", () => {
@@ -164,7 +167,10 @@ describe("item validators", () => {
 
 describe("group validation", () => {
   it("accepts, trims and clears groups on items", () => {
-    expect(validateCreateItem({ name: "A", group: " Veg " })).toEqual({ ok: true, value: { name: "A", group: "Veg" } });
+    expect(validateCreateItem({ name: "A", group: " Veg " })).toEqual({
+      ok: true,
+      value: { fields: { name: "A", group: "Veg" }, saveToProfile: false },
+    });
     expect(validateUpdateItem({ group: null })).toEqual({ ok: true, value: { group: null } });
     expect(validateCreateItem({ name: "A", group: { $ne: null } }).ok).toBe(false);
     expect(validateCreateItem({ name: "A", group: "x".repeat(LIMITS.ITEM_GROUP_MAX + 1) }).ok).toBe(false);
@@ -175,5 +181,29 @@ describe("group validation", () => {
     expect(validateRenameGroup({ from: "Veg", to: "" })).toEqual({ ok: true, value: { from: "Veg", to: null } });
     expect(validateRenameGroup({ from: "Veg" })).toEqual({ ok: true, value: { from: "Veg", to: null } });
     expect(validateRenameGroup({ to: "X" }).ok).toBe(false);
+  });
+});
+
+describe("saveToProfile and saved-item validation", () => {
+  it("reads saveToProfile as a separate flag", () => {
+    const r = validateCreateItem({ name: "A", saveToProfile: true });
+    expect(r).toEqual({ ok: true, value: { fields: { name: "A" }, saveToProfile: true } });
+    expect(validateCreateItem({ name: "A", saveToProfile: "yes" }).ok).toBe(false);
+  });
+
+  it("saved items drop `group`", () => {
+    expect(validateCreateSavedItem({ name: "Milk", group: "Dairy", price: 60 })).toEqual({
+      ok: true,
+      value: { name: "Milk", price: 60 },
+    });
+    expect(validateUpdateSavedItem({ group: "X" }).ok).toBe(false); // nothing left to update
+    expect(validateUpdateSavedItem({ price: null })).toEqual({ ok: true, value: { price: null } });
+  });
+
+  it("cleans the search query", () => {
+    expect(cleanSearchQuery("  milk ")).toBe("milk");
+    expect(cleanSearchQuery("   ")).toBeNull();
+    expect(cleanSearchQuery(null)).toBeNull();
+    expect(cleanSearchQuery("x".repeat(500))?.length).toBe(LIMITS.SEARCH_QUERY_MAX);
   });
 });

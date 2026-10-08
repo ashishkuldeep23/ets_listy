@@ -17,4 +17,6 @@ export const LIMITS = {
   ITEM_GROUP_MAX: 40,
   ITEM_PRICE_MAX: 10_000_000, // rupees
   ITEMS_PER_FOLDER: 1000,
+  SAVED_ITEMS_PER_USER: 500,
+  SEARCH_QUERY_MAX: 100,
 } as const;

@@ -76,5 +76,21 @@ export interface ItemListResponse {
   groups: string[];
 }
 
+/** An item saved to the user's profile for reuse in any folder. Private to its owner. */
+export interface SavedItemDTO {
+  id: string;
+  name: string;
+  category: string | null;
+  price: number | null;
+  description: string | null;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
+
+/** GET /api/saved-items */
+export interface SavedItemListResponse {
+  savedItems: SavedItemDTO[];
+}
+
 /** Result of a request-body validator: only allowed fields, or an error. */
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string };

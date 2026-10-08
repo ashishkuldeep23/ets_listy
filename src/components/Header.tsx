@@ -39,9 +39,9 @@ export default function Header() {
       </Link>
       <div className="flex items-center gap-3 text-sm">
         {user && (
-          <span className="text-muted">
+          <Link href="/profile" className="text-muted hover:text-fg" title="Profile and saved items">
             Hi, <span className="text-accent">{user.name}</span>
-          </span>
+          </Link>
         )}
         <button onClick={logout} className="btn-ghost">
           Logout

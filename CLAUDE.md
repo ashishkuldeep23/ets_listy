@@ -53,6 +53,9 @@ src/
     api/folders/[id]/items/[itemId]/route.ts     # PATCH, DELETE (canEdit)
     api/folders/[id]/items/[itemId]/toggle/route.ts # POST { done } (canCheck)
     api/folders/[id]/groups/rename/route.ts      # POST { from, to } (canEdit)
+    api/saved-items/route.ts                     # GET ?q= (my saved items), POST (upsert)
+    api/saved-items/[id]/route.ts                # PATCH (409 on duplicate), DELETE
+    profile/page.tsx         # my profile + saved items (components/ProfileView.tsx)
   components/
     Header.tsx               # top bar with user name + Logout
     AuthForm.tsx             # shared login/signup form
@@ -63,6 +66,10 @@ src/
     ItemForm.tsx             # add / edit item (name required, rest optional)
     ItemRow.tsx              # one item: tick, details, edit, delete
     GroupSection.tsx         # collapsible group of items + rename
+    SavedItemPicker.tsx      # "Add from saved" panel (Add / Edit & add)
+    ProfileView.tsx          # profile page body
+  hooks/
+    useSavedItems.ts         # debounced saved-items search, shared by picker + profile
   lib/
     db.ts          # cached Mongoose connection: always use connectDB()
     session.ts     # sign/verify session JWT (jose); no DB, used by proxy.ts
@@ -73,6 +80,7 @@ src/
     items.ts       # toItemUpdate() (null → $unset), countItems(), countItemsByFolder()
     format.ts      # formatRupees()
     totals.ts      # computeTotals() (in paise), groupItems() (A–Z, ungrouped last)
+    savedItems.ts  # upsertSavedItem() (no duplicates, limit), updateSavedItem(), escapeRegex()
     rateLimit.ts   # in-memory rate limiter (per process only)
     safeRedirect.ts # safeNextPath() for ?next= redirects
     limits.ts      # size limits shared by validators and schemas
@@ -82,6 +90,7 @@ src/
     User.ts        # passwordHash is select:false
     Folder.ts      # + serializeFolder(), statusFilter() (missing status = active)
     Item.ts        # + serializeItem(); populate DONE_BY_NAME for doneBy (name only)
+    SavedItem.ts   # private per user; unique owner+nameKey+categoryKey (case-insensitive)
   test/
     setup.ts       # setupTestDb(), makeRequest(), routeCtx(), json<T>(), createUserAndCookie()
 ```
@@ -147,7 +156,8 @@ src/
    Add every new env var (with an empty value) to `.env.example`.
 5. **No raw HTML from users.** Do not use `dangerouslySetInnerHTML` on user
    data. React escapes text by default, so keep it that way.
-6. **Limit sizes** of every string and array (see `lib/limits.ts`).
+6. **Limit sizes** of every string and array (see `lib/limits.ts`). User text
+   used in a `$regex` must go through `escapeRegex()` first.
 7. **Every API route except `/api/auth/*` starts with `requireUser(request)`**
    and scopes its queries to that user. `src/proxy.ts` only redirects pages;
    it is not an API guard. Never return `passwordHash`, and keep auth

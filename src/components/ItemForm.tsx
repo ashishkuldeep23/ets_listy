@@ -1,7 +1,8 @@
 "use client";
 
-// Form for adding or editing an item. Only the name is required; the other
-// fields show behind "More details" to keep quick adds fast.
+// Form for adding or editing an item (also used for saved items on the
+// profile page). Only the name is required; the other fields show behind
+// "More details" to keep quick adds fast.
 
 import { useId, useState, type FormEvent } from "react";
 import { LIMITS } from "@/lib/limits";
@@ -14,26 +15,46 @@ export interface ItemFormValues {
   price: number | null;
   description: string | null;
   group: string | null;
+  /** Add mode only, when the checkbox is shown: also save to my profile. */
+  saveToProfile?: boolean;
 }
 
+type Prefill = Partial<Pick<ItemDTO, "name" | "category" | "price" | "description" | "group">>;
+
 interface ItemFormProps {
-  /** Pre-fill for editing; omit for a new item. */
-  initial?: Pick<ItemDTO, "name" | "category" | "price" | "description" | "group">;
+  /** "add" clears the form after saving; "edit" keeps it (the parent closes it). */
+  mode?: "add" | "edit";
+  /** Starting values (the item being edited, or a saved item to add). */
+  initial?: Prefill;
   /** Existing group names in this folder, offered as suggestions. */
   groups?: string[];
+  /** Saved items have no group, so the profile page hides it. */
+  showGroup?: boolean;
+  /** Shows the "Save to my profile" checkbox (folder page, add mode). */
+  showSaveToProfile?: boolean;
   submitLabel: string;
   /** Return true when saved, so the form can reset. */
   onSubmit: (values: ItemFormValues) => Promise<boolean>;
   onCancel?: () => void;
 }
 
-export default function ItemForm({ initial, groups = [], submitLabel, onSubmit, onCancel }: ItemFormProps) {
+export default function ItemForm({
+  mode = "add",
+  initial,
+  groups = [],
+  showGroup = true,
+  showSaveToProfile = false,
+  submitLabel,
+  onSubmit,
+  onCancel,
+}: ItemFormProps) {
   const groupListId = useId();
   const [name, setName] = useState(initial?.name ?? "");
   const [category, setCategory] = useState(initial?.category ?? "");
   const [price, setPrice] = useState(initial?.price != null ? String(initial.price) : "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [group, setGroup] = useState(initial?.group ?? "");
+  const [saveToProfile, setSaveToProfile] = useState(false);
   // Editing an item that already has details: show them straight away.
   const [showMore, setShowMore] = useState(
     Boolean(initial?.category || initial?.price != null || initial?.description || initial?.group)
@@ -58,11 +79,12 @@ export default function ItemForm({ initial, groups = [], submitLabel, onSubmit, 
       category: category.trim() || null,
       price: priceNumber,
       description: description.trim() || null,
-      group: group.trim() || null,
+      group: showGroup ? group.trim() || null : null,
+      ...(showSaveToProfile && { saveToProfile }),
     });
     setBusy(false);
 
-    if (saved && !initial) {
+    if (saved && mode === "add") {
       setName("");
       setCategory("");
       setPrice("");
@@ -95,19 +117,23 @@ export default function ItemForm({ initial, groups = [], submitLabel, onSubmit, 
 
       {showMore ? (
         <div className="grid gap-2 sm:grid-cols-2">
-          <input
-            value={group}
-            onChange={(e) => setGroup(e.target.value)}
-            placeholder="Group (optional, e.g. Vegetables)"
-            maxLength={LIMITS.ITEM_GROUP_MAX}
-            list={groupListId}
-            className="input"
-          />
-          <datalist id={groupListId}>
-            {groups.map((g) => (
-              <option key={g} value={g} />
-            ))}
-          </datalist>
+          {showGroup && (
+            <>
+              <input
+                value={group}
+                onChange={(e) => setGroup(e.target.value)}
+                placeholder="Group (optional, e.g. Vegetables)"
+                maxLength={LIMITS.ITEM_GROUP_MAX}
+                list={groupListId}
+                className="input"
+              />
+              <datalist id={groupListId}>
+                {groups.map((g) => (
+                  <option key={g} value={g} />
+                ))}
+              </datalist>
+            </>
+          )}
           <input
             value={category}
             onChange={(e) => setCategory(e.target.value)}
@@ -137,8 +163,20 @@ export default function ItemForm({ initial, groups = [], submitLabel, onSubmit, 
         </div>
       ) : (
         <button type="button" onClick={() => setShowMore(true)} className="link self-start text-sm">
-          + More details (group, category, price, description)
+          + More details ({showGroup ? "group, " : ""}category, price, description)
         </button>
+      )}
+
+      {showSaveToProfile && (
+        <label className="flex items-center gap-2 text-sm text-muted">
+          <input
+            type="checkbox"
+            checked={saveToProfile}
+            onChange={(e) => setSaveToProfile(e.target.checked)}
+            className="size-4 accent-primary"
+          />
+          Save to my profile (reuse it in other folders)
+        </label>
       )}
 
       {error && <p className="text-sm text-danger">{error}</p>}

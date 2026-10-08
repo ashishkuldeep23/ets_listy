@@ -25,6 +25,7 @@ export default function ItemRow({ item, groups, canCheck, canEdit, onToggle, onS
     return (
       <li className="card">
         <ItemForm
+          mode="edit"
           initial={item}
           groups={groups}
           submitLabel="Save"
