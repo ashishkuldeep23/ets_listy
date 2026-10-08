@@ -13,7 +13,7 @@ export const USER_CHANNEL_RE = /^private-user-([a-f0-9]{24})$/;
 export const EVENTS = {
   itemCreated: "item.created",
   itemUpdated: "item.updated",
-  itemsUpdated: "items.updated",
+  groupRenamed: "group.renamed",
   itemDeleted: "item.deleted",
   folderUpdated: "folder.updated",
   folderDeleted: "folder.deleted",

@@ -2,6 +2,8 @@ import mongoose from "mongoose";
 import { requireUser } from "@/lib/auth";
 import { getFolderAccess } from "@/lib/access";
 import { toItemUpdate } from "@/lib/items";
+import { getSocketId, publishFolderEvent } from "@/lib/realtime";
+import { EVENTS } from "@/lib/channels";
 import { validateUpdateItem } from "@/lib/validators";
 import { jsonError, readJson, serverError } from "@/lib/http";
 import { Item, DONE_BY_NAME, serializeItem, type ItemDoc } from "@/models/Item";
@@ -38,7 +40,9 @@ export async function PATCH(request: Request, ctx: Ctx): Promise<Response> {
       .populate(DONE_BY_NAME)
       .lean<ItemDoc>();
     if (!item) return jsonError(NOT_FOUND, 404);
-    return Response.json(serializeItem(item));
+    const dto = serializeItem(item);
+    await publishFolderEvent(id, EVENTS.itemUpdated, { item: dto }, getSocketId(request));
+    return Response.json(dto);
   } catch (err) {
     return serverError(err);
   }
@@ -58,6 +62,7 @@ export async function DELETE(request: Request, ctx: Ctx): Promise<Response> {
     if (!mongoose.isValidObjectId(itemId)) return jsonError(NOT_FOUND, 404);
     const { deletedCount } = await Item.deleteOne({ _id: itemId, folder: access.folder._id });
     if (deletedCount === 0) return jsonError(NOT_FOUND, 404);
+    await publishFolderEvent(id, EVENTS.itemDeleted, { itemId }, getSocketId(request));
     return new Response(null, { status: 204 });
   } catch (err) {
     return serverError(err);

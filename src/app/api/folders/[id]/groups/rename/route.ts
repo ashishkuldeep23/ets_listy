@@ -1,6 +1,8 @@
 import { requireUser } from "@/lib/auth";
 import { getFolderAccess } from "@/lib/access";
 import { validateRenameGroup } from "@/lib/validators";
+import { getSocketId, publishFolderEvent } from "@/lib/realtime";
+import { EVENTS } from "@/lib/channels";
 import { jsonError, readJson, serverError } from "@/lib/http";
 import { Item } from "@/models/Item";
 
@@ -29,6 +31,9 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
 
     const update = to === null ? { $unset: { group: "" } } : { $set: { group: to } };
     const { modifiedCount } = await Item.updateMany({ folder: access.folder._id, group: from }, update);
+    if (modifiedCount > 0) {
+      await publishFolderEvent(id, EVENTS.groupRenamed, { from, to }, getSocketId(request));
+    }
     return Response.json({ updated: modifiedCount });
   } catch (err) {
     return serverError(err);

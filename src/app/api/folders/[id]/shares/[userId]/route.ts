@@ -5,6 +5,8 @@ import { getShareLink, listShares } from "@/lib/shares";
 import { validateSharePermissions } from "@/lib/validators";
 import { jsonError, readJson, serverError } from "@/lib/http";
 import { Share, mergePermissions } from "@/models/Share";
+import { publishFolderEvent } from "@/lib/realtime";
+import { EVENTS } from "@/lib/channels";
 import type { ShareListResponse } from "@/types";
 
 // Change or remove one person's access to a folder.
@@ -35,6 +37,7 @@ export async function PATCH(request: Request, ctx: Ctx): Promise<Response> {
 
     share.set(mergePermissions(share, result.value));
     await share.save();
+    await publishFolderEvent(id, EVENTS.accessChanged, { userId });
 
     const res: ShareListResponse = {
       shares: await listShares(access.folder._id),
@@ -62,6 +65,7 @@ export async function DELETE(request: Request, ctx: Ctx): Promise<Response> {
     if (!mongoose.isValidObjectId(userId)) return jsonError(NOT_FOUND, 404);
     const { deletedCount } = await Share.deleteOne({ folder: access.folder._id, sharedWith: userId });
     if (deletedCount === 0) return jsonError(NOT_FOUND, 404);
+    await publishFolderEvent(id, EVENTS.accessChanged, { userId });
     return new Response(null, { status: 204 });
   } catch (err) {
     return serverError(err);

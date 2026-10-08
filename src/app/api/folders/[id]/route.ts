@@ -6,6 +6,8 @@ import { Folder, serializeFolder } from "@/models/Folder";
 import { Item } from "@/models/Item";
 import { Share } from "@/models/Share";
 import { ShareLink } from "@/models/ShareLink";
+import { getSocketId, publishFolderEvent } from "@/lib/realtime";
+import { EVENTS } from "@/lib/channels";
 import type { FolderDetailDTO } from "@/types";
 
 type Ctx = RouteContext<"/api/folders/[id]">;
@@ -54,7 +56,9 @@ export async function PATCH(request: Request, ctx: Ctx): Promise<Response> {
       { returnDocument: "after", runValidators: true }
     ).lean();
     if (!folder) return jsonError(NOT_FOUND, 404);
-    return Response.json(serializeFolder(folder));
+    const dto = serializeFolder(folder);
+    await publishFolderEvent(id, EVENTS.folderUpdated, { folder: dto }, getSocketId(request));
+    return Response.json(dto);
   } catch (err) {
     return serverError(err);
   }
@@ -76,6 +80,7 @@ export async function DELETE(request: Request, ctx: Ctx): Promise<Response> {
     await Share.deleteMany({ folder: access.folder._id });
     await ShareLink.deleteMany({ folder: access.folder._id });
     await Folder.deleteOne({ _id: access.folder._id });
+    await publishFolderEvent(id, EVENTS.folderDeleted, { folderId: id }, getSocketId(request));
     return new Response(null, { status: 204 });
   } catch (err) {
     return serverError(err);

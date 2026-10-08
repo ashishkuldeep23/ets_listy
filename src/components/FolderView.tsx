@@ -2,13 +2,16 @@
 
 // Folder page body: the folder header, progress, its items grouped into
 // sections (add, edit, tick, delete, rename a group), price totals, and
-// "Add from saved" to reuse items from my profile. Loads the folder by the id in the URL; the API answers 404
-// for folders that don't exist or aren't mine, shown as "not found".
-// What the user may do (tick / edit) comes from the API, not guessed here.
+// "Add from saved" to reuse items from my profile.
+// Loads the folder by the id in the URL; the API answers 404 for folders
+// that don't exist or that I can't access, shown as "not found". What I may
+// do (tick / edit / manage) comes from the API, not guessed here.
+// Live: listens on the folder's Pusher channel, so changes made by anyone
+// else show up without a refresh. The server is still the source of truth.
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import GroupSection from "@/components/GroupSection";
 import ItemForm, { type ItemFormValues } from "@/components/ItemForm";
 import ItemRow from "@/components/ItemRow";
@@ -16,12 +19,22 @@ import ProgressBar from "@/components/ProgressBar";
 import SavedItemPicker from "@/components/SavedItemPicker";
 import SharePanel from "@/components/SharePanel";
 import StatusBadge from "@/components/StatusBadge";
+import { useChannel } from "@/hooks/useChannel";
 import { ApiError, apiFetch } from "@/lib/apiClient";
+import { EVENTS, folderChannel } from "@/lib/channels";
 import { formatRupees } from "@/lib/format";
 import { computeTotals, groupItems } from "@/lib/totals";
-import type { FolderDetailDTO, ItemDTO, ItemListResponse, SavedItemDTO, SessionUser } from "@/types";
+import type { FolderDTO, FolderDetailDTO, ItemDTO, ItemListResponse, SavedItemDTO, SessionUser } from "@/types";
 
 type LoadState = "loading" | "ready" | "notFound" | "error";
+
+/** Adds a group name to a sorted suggestion list (no duplicates). */
+const withGroup = (groups: string[], group: string | null) =>
+  !group || groups.includes(group) ? groups : [...groups, group].sort((a, b) => a.localeCompare(b));
+
+/** True if `incoming` is at least as new as `current` (drops late, out-of-order events). */
+const isNewer = (incoming: ItemDTO, current: ItemDTO) =>
+  new Date(incoming.updatedAt).getTime() >= new Date(current.updatedAt).getTime();
 
 export default function FolderView() {
   const { id } = useParams<{ id: string }>();
@@ -35,11 +48,17 @@ export default function FolderView() {
   const [showShare, setShowShare] = useState(false);
   // A saved item loaded into the add form by "Edit & add". `key` remounts the form with it.
   const [prefill, setPrefill] = useState<{ key: number; item: SavedItemDTO } | null>(null);
+  // Banner for things other people did (folder deleted, access removed).
+  const [notice, setNotice] = useState("");
+
+  const loadAll = useCallback(() => {
+    const base = `/api/folders/${encodeURIComponent(id)}`;
+    return Promise.all([apiFetch<FolderDetailDTO>(base), apiFetch<ItemListResponse>(`${base}/items`)]);
+  }, [id]);
 
   useEffect(() => {
     let cancelled = false;
-    const base = `/api/folders/${encodeURIComponent(id)}`;
-    Promise.all([apiFetch<FolderDetailDTO>(base), apiFetch<ItemListResponse>(`${base}/items`)])
+    loadAll()
       .then(([f, list]) => {
         if (cancelled) return;
         setFolder(f);
@@ -53,7 +72,76 @@ export default function FolderView() {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [loadAll]);
+
+  // Shows a message, then goes home (used when the folder is gone for me).
+  const leaveWithNotice = useCallback(
+    (message: string) => {
+      setNotice(message);
+      setTimeout(() => router.replace("/"), 2000);
+    },
+    [router]
+  );
+
+  // Reload everything: after a reconnect (events may have been missed) or
+  // when my access may have changed. A 404 means my access is gone.
+  const refetch = useCallback(() => {
+    loadAll()
+      .then(([f, list]) => {
+        setFolder(f);
+        setItems(list.items);
+        setGroups(list.groups);
+      })
+      .catch((err: unknown) => {
+        if (err instanceof ApiError && err.status === 404) leaveWithNotice("You no longer have access to this folder.");
+      });
+  }, [loadAll, leaveWithNotice]);
+
+  // Events carry the same DTOs the API returns (server → us: a trust boundary, hence the casts).
+  useChannel(
+    state === "ready" ? folderChannel(id) : null,
+    {
+      [EVENTS.itemCreated]: (data) => {
+        const { item } = data as { item: ItemDTO };
+        setItems((prev) => (prev.some((i) => i.id === item.id) ? prev : [...prev, item]));
+        setGroups((prev) => withGroup(prev, item.group));
+      },
+      [EVENTS.itemUpdated]: (data) => {
+        const { item } = data as { item: ItemDTO };
+        setItems((prev) => prev.map((i) => (i.id === item.id && isNewer(item, i) ? item : i)));
+        setGroups((prev) => withGroup(prev, item.group));
+      },
+      [EVENTS.itemDeleted]: (data) => {
+        const { itemId } = data as { itemId: string };
+        setItems((prev) => prev.filter((i) => i.id !== itemId));
+      },
+      [EVENTS.groupRenamed]: (data) => {
+        const { from, to } = data as { from: string; to: string | null };
+        setItems((prev) => prev.map((i) => (i.group === from ? { ...i, group: to } : i)));
+        setGroups((prev) => withGroup(prev.filter((g) => g !== from), to));
+      },
+      [EVENTS.folderUpdated]: (data) => {
+        const { folder: f } = data as { folder: FolderDTO };
+        // Keep my permissions; only the folder's own fields changed.
+        setFolder((prev) => (prev ? { ...prev, name: f.name, status: f.status, updatedAt: f.updatedAt } : prev));
+      },
+      [EVENTS.folderDeleted]: () => leaveWithNotice("This folder was deleted by its owner."),
+      // Someone's permissions changed or they were removed: re-check mine.
+      [EVENTS.accessChanged]: () => refetch(),
+    },
+    refetch
+  );
+
+  if (notice) {
+    return (
+      <div className="card border-primary/40">
+        <p className="mb-3 text-primary">{notice}</p>
+        <Link href="/" className="link">
+          ← Back to folders
+        </Link>
+      </div>
+    );
+  }
 
   if (state === "loading") return <p className="text-muted">Loading…</p>;
 
@@ -79,9 +167,7 @@ export default function FolderView() {
   const replaceItem = (updated: ItemDTO) => setItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
 
   // Keeps group suggestions in sync after an add / edit / rename.
-  const rememberGroup = (group: string | null) => {
-    if (group) setGroups((prev) => (prev.includes(group) ? prev : [...prev, group].sort((a, b) => a.localeCompare(b))));
-  };
+  const rememberGroup = (group: string | null) => setGroups((prev) => withGroup(prev, group));
 
   // Runs a request and shows its error message; returns true on success.
   async function run(fn: () => Promise<void>): Promise<boolean> {

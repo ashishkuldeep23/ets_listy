@@ -7,6 +7,8 @@ import { validateCreateShare } from "@/lib/validators";
 import { jsonError, readJson, serverError, tooManyRequests } from "@/lib/http";
 import { Share, normalizePermissions } from "@/models/Share";
 import { User } from "@/models/User";
+import { publishFolderEvent } from "@/lib/realtime";
+import { EVENTS } from "@/lib/channels";
 import type { ShareListResponse } from "@/types";
 
 // Who a folder is shared with. Owner only (canManage): a shared user gets
@@ -81,6 +83,8 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
       shares: await listShares(folderId),
       link: await getShareLink(folderId, new URL(request.url).origin),
     };
+    // Re-sharing changed an existing person's permissions: their open screen should update.
+    if (existing) await publishFolderEvent(String(folderId), EVENTS.accessChanged, { userId: String(target._id) });
     return Response.json(res, { status: existing ? 200 : 201 });
   } catch (err) {
     return serverError(err);

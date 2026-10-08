@@ -2,6 +2,8 @@ import { requireUser } from "@/lib/auth";
 import { getFolderAccess } from "@/lib/access";
 import { countItems } from "@/lib/items";
 import { upsertSavedItem } from "@/lib/savedItems";
+import { getSocketId, publishFolderEvent } from "@/lib/realtime";
+import { EVENTS } from "@/lib/channels";
 import { LIMITS } from "@/lib/limits";
 import { validateCreateItem, withoutGroup } from "@/lib/validators";
 import { jsonError, readJson, serverError } from "@/lib/http";
@@ -80,7 +82,9 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
       position: (last?.position ?? -1) + 1,
       createdBy: user.id,
     });
-    return Response.json(serializeItem(item.toObject()), { status: 201 });
+    const dto = serializeItem(item.toObject());
+    await publishFolderEvent(String(folderId), EVENTS.itemCreated, { item: dto }, getSocketId(request));
+    return Response.json(dto, { status: 201 });
   } catch (err) {
     return serverError(err);
   }
