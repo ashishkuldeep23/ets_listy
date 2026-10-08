@@ -13,5 +13,7 @@ export default defineConfig({
     env: { SESSION_SECRET: "test-secret-that-is-at-least-32-characters-long" },
     // The first run downloads a MongoDB binary for mongodb-memory-server.
     hookTimeout: 300_000,
+    // bcrypt (cost 12) is slow on purpose; tests that hash many times need room.
+    testTimeout: 30_000,
   },
 });

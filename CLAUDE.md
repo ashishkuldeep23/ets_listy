@@ -45,18 +45,20 @@ src/
     login/, signup/          # auth pages (use components/AuthForm.js)
     folders/[id]/page.js     # one folder (components/FolderView.js)
     api/auth/signup|login|logout|me/route.js
-    api/folders/route.js     # GET my folders, POST create
+    api/folders/route.js     # GET my folders (?status=, + counts), POST create
     api/folders/[id]/route.js # GET, PATCH (rename), DELETE
   components/
     Header.js                # top bar with user name + Logout
     AuthForm.js              # shared login/signup form
     FolderList.js            # home: create / rename / delete folders
     FolderView.js            # folder page body
+    StatusBadge.js           # folder status label
   lib/
     db.js          # cached Mongoose connection: always use connectDB()
     session.js     # sign/verify session JWT (jose); no DB, used by proxy.js
     auth.js        # hashPassword, getSessionUser, requireUser, session cookie
     access.js      # getFolderAccess(): the ONLY folder permission check
+    constants.js   # FOLDER_STATUSES: add new statuses here only
     apiClient.js   # apiFetch(): browser fetch wrapper, use for all UI calls
     rateLimit.js   # in-memory rate limiter (per process only)
     safeRedirect.js # safeNextPath() for ?next= redirects
@@ -65,7 +67,7 @@ src/
     http.js        # jsonError / readJson / serverError / tooManyRequests
   models/
     User.js        # passwordHash is select:false
-    Folder.js      # + serializeFolder() for API responses
+    Folder.js      # + serializeFolder(), statusFilter() (missing status = active)
   test/
     setup.js       # setupTestDb(), makeRequest(), createUserAndCookie()
 ```

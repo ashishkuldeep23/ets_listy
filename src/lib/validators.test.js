@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { validateCreateFolder, validateLogin, validateSignup, validateUpdateFolder } from "@/lib/validators";
+import { isValidStatus, validateCreateFolder, validateLogin, validateSignup, validateUpdateFolder } from "@/lib/validators";
+import { STATUS_VALUES } from "@/lib/constants";
 
 const good = { name: "Asha", email: "Asha@Example.com", password: "password123" };
 
@@ -75,5 +76,31 @@ describe("folder validators", () => {
     expect(validateUpdateFolder({}).ok).toBe(false);
     expect(validateUpdateFolder({ name: "" }).ok).toBe(false);
     expect(validateUpdateFolder(null).ok).toBe(false);
+  });
+});
+
+describe("folder status validation", () => {
+  it("accepts every configured status on create and update", () => {
+    for (const status of STATUS_VALUES) {
+      expect(validateCreateFolder({ name: "F", status })).toEqual({ ok: true, value: { name: "F", status } });
+      expect(validateUpdateFolder({ status })).toEqual({ ok: true, value: { status } });
+    }
+  });
+
+  it("leaves status out when not given (schema default applies)", () => {
+    expect(validateCreateFolder({ name: "F" }).value).not.toHaveProperty("status");
+  });
+
+  it("rejects unknown statuses and operator objects", () => {
+    for (const status of ["done", "", "ACTIVE", null, 1, { $ne: null }, ["active"]]) {
+      expect(validateCreateFolder({ name: "F", status }).ok).toBe(false);
+      expect(validateUpdateFolder({ status }).ok).toBe(false);
+    }
+  });
+
+  it("isValidStatus guards the ?status= query param", () => {
+    expect(isValidStatus("pending")).toBe(true);
+    expect(isValidStatus("toString")).toBe(false);
+    expect(isValidStatus(undefined)).toBe(false);
   });
 });

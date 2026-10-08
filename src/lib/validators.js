@@ -1,4 +1,5 @@
 import { LIMITS } from "@/lib/limits";
+import { STATUS_VALUES } from "@/lib/constants";
 
 // Plain validators for request bodies. Each returns either
 // { ok: true, value } with ONLY the allowed fields, or { ok: false, error }.
@@ -81,15 +82,27 @@ function cleanFolderName(name) {
   return { value: n };
 }
 
-/** Body for POST /api/folders: { name }. */
+/** True for a known folder status. Also used for the ?status= query param. */
+export function isValidStatus(status) {
+  return typeof status === "string" && STATUS_VALUES.includes(status);
+}
+
+const STATUS_ERROR = `status must be one of: ${STATUS_VALUES.join(", ")}`;
+
+/** Body for POST /api/folders: { name, status? }. */
 export function validateCreateFolder(body) {
   if (!isPlainObject(body)) return { ok: false, error: "body must be a JSON object" };
   const name = cleanFolderName(body.name);
   if (name.error) return { ok: false, error: name.error };
-  return { ok: true, value: { name: name.value } };
+  const value = { name: name.value };
+  if (body.status !== undefined) {
+    if (!isValidStatus(body.status)) return { ok: false, error: STATUS_ERROR };
+    value.status = body.status;
+  }
+  return { ok: true, value };
 }
 
-/** Body for PATCH /api/folders/:id: { name }, at least one field. */
+/** Body for PATCH /api/folders/:id: { name?, status? }, at least one field. */
 export function validateUpdateFolder(body) {
   if (!isPlainObject(body)) return { ok: false, error: "body must be a JSON object" };
   const value = {};
@@ -97,6 +110,10 @@ export function validateUpdateFolder(body) {
     const name = cleanFolderName(body.name);
     if (name.error) return { ok: false, error: name.error };
     value.name = name.value;
+  }
+  if (body.status !== undefined) {
+    if (!isValidStatus(body.status)) return { ok: false, error: STATUS_ERROR };
+    value.status = body.status;
   }
   if (Object.keys(value).length === 0) return { ok: false, error: "nothing to update" };
   return { ok: true, value };

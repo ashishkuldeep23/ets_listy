@@ -6,6 +6,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import StatusBadge from "@/components/StatusBadge";
 
 export default function FolderView() {
   const { id } = useParams();
@@ -48,7 +49,10 @@ export default function FolderView() {
       <Link href="/" className="link text-sm">
         ← All folders
       </Link>
-      <h1 className="mt-2 mb-6 text-2xl font-semibold text-primary">{folder.name}</h1>
+      <div className="mt-2 mb-6 flex flex-wrap items-center gap-3">
+        <h1 className="text-2xl font-semibold wrap-break-word text-primary">{folder.name}</h1>
+        <StatusBadge status={folder.status} />
+      </div>
       <p className="card text-muted">Items are coming in the next phase.</p>
     </div>
   );
