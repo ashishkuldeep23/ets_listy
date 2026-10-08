@@ -7,7 +7,7 @@ import { validateCreateShare } from "@/lib/validators";
 import { jsonError, readJson, serverError, tooManyRequests } from "@/lib/http";
 import { Share, normalizePermissions } from "@/models/Share";
 import { User } from "@/models/User";
-import { publishFolderEvent } from "@/lib/realtime";
+import { publishFolderAccess, publishFolderEvent } from "@/lib/realtime";
 import { EVENTS } from "@/lib/channels";
 import type { ShareListResponse } from "@/types";
 
@@ -85,6 +85,8 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
     };
     // Re-sharing changed an existing person's permissions: their open screen should update.
     if (existing) await publishFolderEvent(String(folderId), EVENTS.accessChanged, { userId: String(target._id) });
+    // A new share: their "Shared with me" list gains this folder.
+    else await publishFolderAccess(String(target._id), String(folderId));
     return Response.json(res, { status: existing ? 200 : 201 });
   } catch (err) {
     return serverError(err);

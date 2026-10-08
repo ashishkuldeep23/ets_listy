@@ -6,9 +6,9 @@ import { Folder, serializeFolder } from "@/models/Folder";
 import { Item } from "@/models/Item";
 import { Share } from "@/models/Share";
 import { ShareLink } from "@/models/ShareLink";
-import { getSocketId, publishFolderEvent } from "@/lib/realtime";
+import { folderAudience, getSocketId, publishFolderEvent, publishUserEvent } from "@/lib/realtime";
 import { EVENTS } from "@/lib/channels";
-import type { FolderDetailDTO } from "@/types";
+import type { FolderDetailDTO, FolderProgressEvent } from "@/types";
 
 type Ctx = RouteContext<"/api/folders/[id]">;
 
@@ -75,12 +75,17 @@ export async function DELETE(request: Request, ctx: Ctx): Promise<Response> {
     if (!access) return jsonError(NOT_FOUND, 404);
     if (!access.canManage) return jsonError("Only the owner can delete this folder", 403);
 
+    // Who to tell, worked out before the shares are deleted.
+    const audience = await folderAudience(access.folder._id);
+
     // Delete everything that belongs to the folder, so nothing is left orphaned.
     await Item.deleteMany({ folder: access.folder._id });
     await Share.deleteMany({ folder: access.folder._id });
     await ShareLink.deleteMany({ folder: access.folder._id });
     await Folder.deleteOne({ _id: access.folder._id });
     await publishFolderEvent(id, EVENTS.folderDeleted, { folderId: id }, getSocketId(request));
+    const gone: FolderProgressEvent = { folderId: id, itemCount: 0, doneCount: 0, deleted: true };
+    await publishUserEvent(audience, EVENTS.folderProgress, gone);
     return new Response(null, { status: 204 });
   } catch (err) {
     return serverError(err);

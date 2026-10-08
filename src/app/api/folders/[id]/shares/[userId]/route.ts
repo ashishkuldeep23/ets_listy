@@ -5,7 +5,7 @@ import { getShareLink, listShares } from "@/lib/shares";
 import { validateSharePermissions } from "@/lib/validators";
 import { jsonError, readJson, serverError } from "@/lib/http";
 import { Share, mergePermissions } from "@/models/Share";
-import { publishFolderEvent } from "@/lib/realtime";
+import { publishFolderAccess, publishFolderEvent } from "@/lib/realtime";
 import { EVENTS } from "@/lib/channels";
 import type { ShareListResponse } from "@/types";
 
@@ -66,6 +66,7 @@ export async function DELETE(request: Request, ctx: Ctx): Promise<Response> {
     const { deletedCount } = await Share.deleteOne({ folder: access.folder._id, sharedWith: userId });
     if (deletedCount === 0) return jsonError(NOT_FOUND, 404);
     await publishFolderEvent(id, EVENTS.accessChanged, { userId });
+    await publishFolderAccess(userId, id, true);
     return new Response(null, { status: 204 });
   } catch (err) {
     return serverError(err);

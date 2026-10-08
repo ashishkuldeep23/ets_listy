@@ -4,15 +4,27 @@
 // delete) and "Shared with me" (folders others shared, with who shared them
 // and what I may do). Tab and status filter live in the URL
 // (/?tab=shared&status=pending) so refresh and the Back button keep them.
+// Live: listens on my user channel, so card progress updates as anyone
+// ticks items, and the shared tab refreshes when I gain or lose a folder.
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useChannel } from "@/hooks/useChannel";
+import { useMe } from "@/hooks/useMe";
 import { apiFetch } from "@/lib/apiClient";
+import { EVENTS, userChannel } from "@/lib/channels";
 import { DEFAULT_STATUS, FOLDER_STATUSES, isFolderStatus, type FolderStatus } from "@/lib/constants";
 import ProgressBar from "@/components/ProgressBar";
 import StatusBadge from "@/components/StatusBadge";
-import type { FolderCounts, FolderDTO, FolderListResponse, FolderScope, FolderSummaryDTO } from "@/types";
+import type {
+  FolderCounts,
+  FolderDTO,
+  FolderListResponse,
+  FolderProgressEvent,
+  FolderScope,
+  FolderSummaryDTO,
+} from "@/types";
 
 type Filter = FolderStatus | "all";
 
@@ -54,6 +66,30 @@ export default function FolderList() {
       cancelled = true;
     };
   }, [fetchFolders]);
+
+  // Reload quietly (no error banner): used for live events and reconnects.
+  const refresh = useCallback(() => {
+    fetchFolders()
+      .then(show)
+      .catch(() => {});
+  }, [fetchFolders]);
+
+  const me = useMe();
+  useChannel(
+    me ? userChannel(me.id) : null,
+    {
+      // Event data comes from our server (trust boundary, hence the cast).
+      [EVENTS.folderProgress]: (data) => {
+        const p = data as FolderProgressEvent;
+        if (p.deleted) return refresh(); // card gone, counts change
+        setFolders((prev) =>
+          prev.map((f) => (f.id === p.folderId ? { ...f, itemCount: p.itemCount, doneCount: p.doneCount } : f))
+        );
+      },
+      [EVENTS.folderAccess]: () => refresh(),
+    },
+    refresh
+  );
 
   // Updates one URL param (null removes it), keeping the others.
   function setParam(key: "status" | "tab", value: string | null) {
@@ -245,7 +281,14 @@ function FolderCard({ folder, onUpdate, onDelete }: FolderCardProps) {
         </div>
       )}
 
-      <ProgressBar done={folder.doneCount} total={folder.itemCount} size="sm" />
+      <div className="flex items-center gap-2">
+        <div className="flex-1">
+          <ProgressBar done={folder.doneCount} total={folder.itemCount} size="sm" />
+        </div>
+        {folder.itemCount > 0 && folder.doneCount === folder.itemCount && (
+          <span className="shrink-0 text-xs font-medium text-accent">All done ✓</span>
+        )}
+      </div>
 
       {/* Only the owner can rename, change status or delete. */}
       {folder.canManage && (

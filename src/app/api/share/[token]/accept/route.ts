@@ -5,6 +5,7 @@ import { jsonError, serverError, tooManyRequests } from "@/lib/http";
 import { Folder } from "@/models/Folder";
 import { Share, normalizePermissions } from "@/models/Share";
 import { ShareLink, isShareTokenShape } from "@/models/ShareLink";
+import { publishFolderAccess } from "@/lib/realtime";
 import type { AcceptShareResponse } from "@/types";
 
 // POST /api/share/:token/accept → { folderId }.
@@ -54,6 +55,8 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
       ...normalizePermissions(link.canCheck, link.canEdit),
       via: "link",
     });
+    // Their other open tabs show it under "Shared with me" right away.
+    await publishFolderAccess(user.id, body.folderId);
     return Response.json(body, { status: 201 });
   } catch (err) {
     return serverError(err);

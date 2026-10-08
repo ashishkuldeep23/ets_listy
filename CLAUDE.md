@@ -83,6 +83,7 @@ src/
   hooks/
     useSavedItems.ts         # debounced saved-items search, shared by picker + profile
     useChannel.ts            # subscribe to a Pusher channel while mounted (+ refetch after reconnect)
+    useMe.ts                 # current user (fetched per mount, no cache)
   lib/
     db.ts          # cached Mongoose connection: always use connectDB()
     session.ts     # sign/verify session JWT (jose); no DB, used by proxy.ts
@@ -94,7 +95,8 @@ src/
     items.ts       # toItemUpdate() (null → $unset), countItems(), countItemsByFolder()
     format.ts      # formatRupees()
     channels.ts    # Pusher channel + event names (shared by server and browser)
-    realtime.ts    # server: publishFolderEvent / publishUserEvent (never throw, no-op without keys)
+    realtime.ts    # server: publishFolderEvent / publishUserEvent / publishFolderProgress /
+                   #   publishFolderAccess (never throw, no-op without keys)
     pusherClient.ts # browser: shared pusher-js client, getSocketId()
     totals.ts      # computeTotals() (in paise), groupItems() (A–Z, ungrouped last)
     savedItems.ts  # upsertSavedItem() (no duplicates, limit), updateSavedItem(), escapeRegex()
@@ -194,6 +196,10 @@ src/
    hashes). Only `private-` channels; `/api/pusher/auth` must check access
    with `getFolderAccess()`. `PUSHER_SECRET` is server-only. Tests mock the
    `pusher` module (see `withPusherEnv()` in `src/test/setup.ts`).
+   Folder channel: item/group/folder/access events (see `lib/channels.ts`).
+   User channel: `folder.progress` (to owner + all shared users after item
+   add/tick/delete and folder delete) and `folder.access` (to one user when
+   they gain or lose a folder).
 9. Run `npm audit --omit=dev` after adding dependencies and report any
    production vulnerabilities.
 10. Security headers are set in `next.config.ts`. Do not remove them.

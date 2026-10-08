@@ -1,5 +1,10 @@
 import Pusher from "pusher";
-import { SOCKET_ID_HEADER, folderChannel, userChannel } from "@/lib/channels";
+import mongoose, { type Types } from "mongoose";
+import { EVENTS, SOCKET_ID_HEADER, folderChannel, userChannel } from "@/lib/channels";
+import { countItems } from "@/lib/items";
+import { Folder } from "@/models/Folder";
+import { Share } from "@/models/Share";
+import type { FolderAccessEvent, FolderProgressEvent } from "@/types";
 
 // Server side of live updates. Routes call these AFTER a successful DB
 // write to tell open screens that something changed; the database stays
@@ -77,4 +82,35 @@ export function publishUserEvent(userIds: string | string[], event: string, data
 export function resetRealtimeForTests(): void {
   client = undefined;
   warned = false;
+}
+
+/** Owner + everyone the folder is shared with: who should hear about its progress. */
+export async function folderAudience(folderId: Types.ObjectId | string): Promise<string[]> {
+  const [folder, shares] = await Promise.all([
+    Folder.findById(folderId).select("owner").lean(),
+    Share.find({ folder: folderId }).select("sharedWith").lean(),
+  ]);
+  if (!folder) return [];
+  return [String(folder.owner), ...shares.map((s) => String(s.sharedWith))];
+}
+
+/**
+ * Sends a folder's item counts to the owner and every shared user, so home
+ * page cards update live. Call after anything that changes the counts.
+ */
+export async function publishFolderProgress(folderId: Types.ObjectId | string): Promise<void> {
+  if (!getClient()) return; // skip the queries when live updates are off
+  try {
+    const [audience, counts] = await Promise.all([folderAudience(folderId), countItems(new mongoose.Types.ObjectId(String(folderId)))]);
+    const data: FolderProgressEvent = { folderId: String(folderId), itemCount: counts.total, doneCount: counts.done };
+    await publishUserEvent(audience, EVENTS.folderProgress, data);
+  } catch (err) {
+    console.error("[realtime] progress failed", err);
+  }
+}
+
+/** Tells one user a folder was shared with them (or they lost it), so their "Shared with me" refreshes. */
+export function publishFolderAccess(userId: string, folderId: string, removed = false): Promise<void> {
+  const data: FolderAccessEvent = { folderId, ...(removed && { removed: true }) };
+  return publishUserEvent(userId, EVENTS.folderAccess, data);
 }

@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import { requireUser } from "@/lib/auth";
 import { getFolderAccess } from "@/lib/access";
 import { toItemUpdate } from "@/lib/items";
-import { getSocketId, publishFolderEvent } from "@/lib/realtime";
+import { getSocketId, publishFolderEvent, publishFolderProgress } from "@/lib/realtime";
 import { EVENTS } from "@/lib/channels";
 import { validateUpdateItem } from "@/lib/validators";
 import { jsonError, readJson, serverError } from "@/lib/http";
@@ -63,6 +63,7 @@ export async function DELETE(request: Request, ctx: Ctx): Promise<Response> {
     const { deletedCount } = await Item.deleteOne({ _id: itemId, folder: access.folder._id });
     if (deletedCount === 0) return jsonError(NOT_FOUND, 404);
     await publishFolderEvent(id, EVENTS.itemDeleted, { itemId }, getSocketId(request));
+    await publishFolderProgress(access.folder._id);
     return new Response(null, { status: 204 });
   } catch (err) {
     return serverError(err);

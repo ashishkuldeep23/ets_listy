@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import { requireUser } from "@/lib/auth";
 import { getFolderAccess } from "@/lib/access";
 import { validateToggle } from "@/lib/validators";
-import { getSocketId, publishFolderEvent } from "@/lib/realtime";
+import { getSocketId, publishFolderEvent, publishFolderProgress } from "@/lib/realtime";
 import { EVENTS } from "@/lib/channels";
 import { jsonError, readJson, serverError } from "@/lib/http";
 import { Item, DONE_BY_NAME, serializeItem, type ItemDoc } from "@/models/Item";
@@ -46,6 +46,7 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
     if (!item) return jsonError(NOT_FOUND, 404);
     const dto = serializeItem(item);
     await publishFolderEvent(id, EVENTS.itemUpdated, { item: dto }, getSocketId(request));
+    await publishFolderProgress(access.folder._id);
     return Response.json(dto);
   } catch (err) {
     return serverError(err);

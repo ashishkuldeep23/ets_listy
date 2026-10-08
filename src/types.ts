@@ -133,5 +133,20 @@ export interface SavedItemListResponse {
   savedItems: SavedItemDTO[];
 }
 
+/** folder.progress on a user channel: new counts for one folder card. */
+export interface FolderProgressEvent {
+  folderId: string;
+  itemCount: number;
+  doneCount: number;
+  /** The folder was deleted: remove the card. */
+  deleted?: true;
+}
+
+/** folder.access on a user channel: a folder was shared with me, or I lost it. */
+export interface FolderAccessEvent {
+  folderId: string;
+  removed?: true;
+}
+
 /** Result of a request-body validator: only allowed fields, or an error. */
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string };

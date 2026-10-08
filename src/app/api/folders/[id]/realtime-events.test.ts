@@ -28,8 +28,10 @@ beforeEach(() => {
 type U = Awaited<ReturnType<typeof createUserAndCookie>>;
 const SOCKET = { [SOCKET_ID_HEADER]: "111.222" };
 
-/** All [channel(s), event, data, params] calls made to Pusher so far. */
-const published = () => trigger.mock.calls as [string[], string, unknown, { socket_id: string } | undefined][];
+type Call = [string[], string, unknown, { socket_id: string } | undefined];
+/** [channel(s), event, data, params] calls made to Pusher on FOLDER channels (user-channel events are tested in 4.3). */
+const published = () =>
+  (trigger.mock.calls as Call[]).filter(([channels]) => channels.every((c) => c.startsWith("private-folder-")));
 const eventsSent = () => published().map(([, event]) => event);
 
 async function setup() {
