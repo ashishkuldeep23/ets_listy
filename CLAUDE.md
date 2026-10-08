@@ -48,20 +48,28 @@ src/
     folders/[id]/page.tsx    # one folder (components/FolderView.tsx)
     api/auth/signup|login|logout|me/route.ts
     api/folders/route.ts     # GET my folders (?status=, + counts), POST create
-    api/folders/[id]/route.ts # GET, PATCH (rename), DELETE
+    api/folders/[id]/route.ts # GET (+ canCheck/canEdit/canManage), PATCH, DELETE (+ its items)
+    api/folders/[id]/items/route.ts              # GET items + counts, POST (canEdit)
+    api/folders/[id]/items/[itemId]/route.ts     # PATCH, DELETE (canEdit)
+    api/folders/[id]/items/[itemId]/toggle/route.ts # POST { done } (canCheck)
   components/
     Header.tsx               # top bar with user name + Logout
     AuthForm.tsx             # shared login/signup form
     FolderList.tsx           # home: create / rename / delete folders
     FolderView.tsx           # folder page body
     StatusBadge.tsx          # folder status label
+    ProgressBar.tsx          # "3 / 10 done" bar
+    ItemForm.tsx             # add / edit item (name required, rest optional)
+    ItemRow.tsx              # one item: tick, details, edit, delete
   lib/
     db.ts          # cached Mongoose connection: always use connectDB()
     session.ts     # sign/verify session JWT (jose); no DB, used by proxy.ts
     auth.ts        # hashPassword, getSessionUser, requireUser, session cookie
     access.ts      # getFolderAccess(): the ONLY folder permission check
     constants.ts   # FOLDER_STATUSES: add new statuses here only
-    apiClient.ts   # apiFetch(): browser fetch wrapper, use for all UI calls
+    apiClient.ts   # apiFetch<T>() + ApiError: browser fetch wrapper, use for all UI calls
+    items.ts       # toItemUpdate() (null → $unset), countItems(), countItemsByFolder()
+    format.ts      # formatRupees()
     rateLimit.ts   # in-memory rate limiter (per process only)
     safeRedirect.ts # safeNextPath() for ?next= redirects
     limits.ts      # size limits shared by validators and schemas
@@ -70,6 +78,7 @@ src/
   models/
     User.ts        # passwordHash is select:false
     Folder.ts      # + serializeFolder(), statusFilter() (missing status = active)
+    Item.ts        # + serializeItem(); populate DONE_BY_NAME for doneBy (name only)
   test/
     setup.ts       # setupTestDb(), makeRequest(), routeCtx(), json<T>(), createUserAndCookie()
 ```
@@ -141,7 +150,8 @@ src/
    it is not an API guard. Never return `passwordHash`, and keep auth
    failures vague ("Invalid email or password").
    Folder and item routes decide access **only** via `getFolderAccess()`
-   (null → 404, missing flag → 403). Send API data through `serialize*()`
+   (null → 404, missing flag → 403). Item queries always filter by the
+   folder from the URL too, so an item can't be reached through another folder. Send API data through `serialize*()`
    helpers so internal fields (like `owner`) don't leak.
 8. Run `npm audit --omit=dev` after adding dependencies and report any
    production vulnerabilities.

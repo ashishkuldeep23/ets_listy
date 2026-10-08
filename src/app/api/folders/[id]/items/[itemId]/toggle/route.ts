@@ -1,0 +1,49 @@
+import mongoose from "mongoose";
+import { requireUser } from "@/lib/auth";
+import { getFolderAccess } from "@/lib/access";
+import { validateToggle } from "@/lib/validators";
+import { jsonError, readJson, serverError } from "@/lib/http";
+import { Item, DONE_BY_NAME, serializeItem, type ItemDoc } from "@/models/Item";
+
+// POST /api/folders/:id/items/:itemId/toggle: { done }. Needs canCheck.
+// A separate route (not PATCH) so sharing can allow "tick only" without
+// allowing edits.
+
+type Ctx = RouteContext<"/api/folders/[id]/items/[itemId]/toggle">;
+
+const NOT_FOUND = "Item not found";
+
+export async function POST(request: Request, ctx: Ctx): Promise<Response> {
+  try {
+    const user = await requireUser(request);
+    if (user instanceof Response) return user;
+
+    const { id, itemId } = await ctx.params;
+    const access = await getFolderAccess(user.id, id);
+    if (!access) return jsonError(NOT_FOUND, 404);
+    if (!access.canCheck) return jsonError("You can't tick items in this folder", 403);
+
+    const body = await readJson(request);
+    if (body === undefined) return jsonError("Invalid JSON body", 400);
+    const result = validateToggle(body);
+    if (!result.ok) return jsonError(result.error, 400);
+
+    if (!mongoose.isValidObjectId(itemId)) return jsonError(NOT_FOUND, 404);
+
+    // Record who ticked it and when; clear both when unticked.
+    const update = result.value.done
+      ? { $set: { done: true, doneBy: user.id, doneAt: new Date() } }
+      : { $set: { done: false }, $unset: { doneBy: "", doneAt: "" } };
+
+    // Filtering by folder too means an item from another folder is simply "not found".
+    const item = await Item.findOneAndUpdate({ _id: itemId, folder: access.folder._id }, update, {
+      returnDocument: "after",
+    })
+      .populate(DONE_BY_NAME)
+      .lean<ItemDoc>();
+    if (!item) return jsonError(NOT_FOUND, 404);
+    return Response.json(serializeItem(item));
+  } catch (err) {
+    return serverError(err);
+  }
+}

@@ -19,18 +19,57 @@ export interface FolderDTO {
   updatedAt: string | Date;
 }
 
-/** GET /api/folders/:id adds the caller's role. */
+/** GET /api/folders/:id adds what the caller may do (see lib/access.ts). */
 export interface FolderDetailDTO extends FolderDTO {
   role: "owner";
+  canCheck: boolean;
+  canEdit: boolean;
+  canManage: boolean;
 }
 
 /** Count of my folders per status, plus "all". */
 export type FolderCounts = Record<FolderStatus | "all", number>;
 
+/** Folder card on the home page: the folder plus item progress. */
+export interface FolderSummaryDTO extends FolderDTO {
+  itemCount: number;
+  doneCount: number;
+}
+
 /** GET /api/folders */
 export interface FolderListResponse {
-  folders: FolderDTO[];
+  folders: FolderSummaryDTO[];
   counts: FolderCounts;
+}
+
+/** A user shown next to something they did (e.g. who ticked an item). Never includes email. */
+export interface UserRef {
+  id: string;
+  name: string;
+}
+
+/** An item inside a folder. Optional fields are null when not set. */
+export interface ItemDTO {
+  id: string;
+  folderId: string;
+  name: string;
+  category: string | null;
+  /** Rupees. */
+  price: number | null;
+  description: string | null;
+  done: boolean;
+  doneBy: UserRef | null;
+  doneAt: string | Date | null;
+  position: number;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
+
+/** GET /api/folders/:id/items */
+export interface ItemListResponse {
+  items: ItemDTO[];
+  total: number;
+  done: number;
 }
 
 /** Result of a request-body validator: only allowed fields, or an error. */

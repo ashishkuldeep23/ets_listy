@@ -3,6 +3,7 @@ import { getFolderAccess } from "@/lib/access";
 import { validateUpdateFolder } from "@/lib/validators";
 import { jsonError, readJson, serverError } from "@/lib/http";
 import { Folder, serializeFolder } from "@/models/Folder";
+import { Item } from "@/models/Item";
 import type { FolderDetailDTO } from "@/types";
 
 type Ctx = RouteContext<"/api/folders/[id]">;
@@ -22,7 +23,8 @@ export async function GET(request: Request, ctx: Ctx): Promise<Response> {
     const access = await getFolderAccess(user.id, id);
     if (!access) return jsonError(NOT_FOUND, 404);
 
-    const body: FolderDetailDTO = { ...serializeFolder(access.folder), role: access.role };
+    const { role, canCheck, canEdit, canManage } = access;
+    const body: FolderDetailDTO = { ...serializeFolder(access.folder), role, canCheck, canEdit, canManage };
     return Response.json(body);
   } catch (err) {
     return serverError(err);
@@ -68,9 +70,10 @@ export async function DELETE(request: Request, ctx: Ctx): Promise<Response> {
     if (!access) return jsonError(NOT_FOUND, 404);
     if (!access.canManage) return jsonError("Only the owner can delete this folder", 403);
 
-    // LATER PHASES: also delete this folder's items (Phase 2) and its
-    // shares + share link (Phase 3) here, so nothing is left orphaned.
-    await Folder.deleteOne({ _id: id });
+    // Delete the folder's items too, so nothing is left orphaned.
+    // LATER (Phase 3): also delete its shares + share link here.
+    await Item.deleteMany({ folder: access.folder._id });
+    await Folder.deleteOne({ _id: access.folder._id });
     return new Response(null, { status: 204 });
   } catch (err) {
     return serverError(err);

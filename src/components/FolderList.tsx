@@ -9,7 +9,8 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { apiFetch } from "@/lib/apiClient";
 import { DEFAULT_STATUS, FOLDER_STATUSES, isFolderStatus, type FolderStatus } from "@/lib/constants";
-import type { FolderCounts, FolderDTO, FolderListResponse } from "@/types";
+import ProgressBar from "@/components/ProgressBar";
+import type { FolderCounts, FolderDTO, FolderListResponse, FolderSummaryDTO } from "@/types";
 
 type Filter = FolderStatus | "all";
 import StatusBadge from "@/components/StatusBadge";
@@ -22,7 +23,7 @@ export default function FolderList() {
   const rawStatus = searchParams.get("status");
   const filter: Filter = isFolderStatus(rawStatus) ? rawStatus : "all";
 
-  const [folders, setFolders] = useState<FolderDTO[]>([]);
+  const [folders, setFolders] = useState<FolderSummaryDTO[]>([]);
   const [counts, setCounts] = useState<FolderCounts | null>(null);
   const [name, setName] = useState("");
   const [newStatus, setNewStatus] = useState<FolderStatus>(DEFAULT_STATUS);
@@ -155,7 +156,7 @@ export default function FolderList() {
 }
 
 interface FolderCardProps {
-  folder: FolderDTO;
+  folder: FolderSummaryDTO;
   onUpdate: (changes: Partial<Pick<FolderDTO, "name" | "status">>) => Promise<boolean>;
   onDelete: () => void;
 }
@@ -201,6 +202,8 @@ function FolderCard({ folder, onUpdate, onDelete }: FolderCardProps) {
           <StatusBadge status={folder.status} />
         </div>
       )}
+
+      <ProgressBar done={folder.doneCount} total={folder.itemCount} size="sm" />
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
         <select

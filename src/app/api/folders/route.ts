@@ -7,6 +7,7 @@ import type { FolderCounts, FolderListResponse } from "@/types";
 import { isValidStatus, validateCreateFolder } from "@/lib/validators";
 import { jsonError, readJson, serverError } from "@/lib/http";
 import { Folder, serializeFolder, statusFilter } from "@/models/Folder";
+import { countItemsByFolder } from "@/lib/items";
 
 /**
  * GET /api/folders?status=pending
@@ -42,7 +43,15 @@ export async function GET(request: Request): Promise<Response> {
     for (const g of grouped) if (isFolderStatus(g._id)) counts[g._id] = g.n;
     counts.all = grouped.reduce((sum, g) => sum + g.n, 0);
 
-    const body: FolderListResponse = { folders: folders.map(serializeFolder), counts };
+    // Item progress for every folder card, in one query.
+    const progress = await countItemsByFolder(folders.map((f) => f._id));
+    const body: FolderListResponse = {
+      folders: folders.map((f) => ({
+        ...serializeFolder(f),
+        ...(progress.get(String(f._id)) ?? { itemCount: 0, doneCount: 0 }),
+      })),
+      counts,
+    };
     return Response.json(body);
   } catch (err) {
     return serverError(err);

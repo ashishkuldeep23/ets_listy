@@ -1,5 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { isValidStatus, validateCreateFolder, validateLogin, validateSignup, validateUpdateFolder } from "@/lib/validators";
+import {
+  isValidStatus,
+  validateCreateFolder,
+  validateCreateItem,
+  validateLogin,
+  validateSignup,
+  validateToggle,
+  validateUpdateFolder,
+  validateUpdateItem,
+} from "@/lib/validators";
+import { LIMITS } from "@/lib/limits";
 import { STATUS_VALUES } from "@/lib/constants";
 
 const good = { name: "Asha", email: "Asha@Example.com", password: "password123" };
@@ -102,5 +112,51 @@ describe("folder status validation", () => {
     expect(isValidStatus("pending")).toBe(true);
     expect(isValidStatus("toString")).toBe(false);
     expect(isValidStatus(undefined)).toBe(false);
+  });
+});
+
+describe("item validators", () => {
+  it("accepts a name with optional fields and trims text", () => {
+    expect(validateCreateItem({ name: " Milk ", category: " Dairy ", price: 60.5, description: " 1L " })).toEqual({
+      ok: true,
+      value: { name: "Milk", category: "Dairy", price: 60.5, description: "1L" },
+    });
+  });
+
+  it("treats empty optional text as null and drops unknown fields", () => {
+    expect(validateCreateItem({ name: "Milk", category: "  ", done: true, folder: "x" })).toEqual({
+      ok: true,
+      value: { name: "Milk", category: null },
+    });
+  });
+
+  it("rounds price to paise", () => {
+    const r = validateCreateItem({ name: "A", price: 0.1 + 0.2 });
+    expect(r.ok && r.value.price).toBe(0.3);
+  });
+
+  it("rejects bad prices", () => {
+    for (const price of ["12", -1, NaN, Infinity, LIMITS.ITEM_PRICE_MAX + 1, { $gt: 0 }, true]) {
+      expect(validateCreateItem({ name: "A", price }).ok).toBe(false);
+    }
+  });
+
+  it("rejects bad names and over-long text", () => {
+    for (const name of [undefined, "", "  ", 1, { $ne: null }, "x".repeat(LIMITS.ITEM_NAME_MAX + 1)]) {
+      expect(validateCreateItem({ name }).ok).toBe(false);
+    }
+    expect(validateCreateItem({ name: "A", category: "x".repeat(LIMITS.ITEM_CATEGORY_MAX + 1) }).ok).toBe(false);
+    expect(validateCreateItem({ name: "A", description: "x".repeat(LIMITS.ITEM_DESCRIPTION_MAX + 1) }).ok).toBe(false);
+  });
+
+  it("update allows null to clear, needs at least one field", () => {
+    expect(validateUpdateItem({ price: null, category: null })).toEqual({ ok: true, value: { price: null, category: null } });
+    expect(validateUpdateItem({}).ok).toBe(false);
+    expect(validateUpdateItem({ name: null }).ok).toBe(false);
+  });
+
+  it("toggle needs a real boolean", () => {
+    expect(validateToggle({ done: true })).toEqual({ ok: true, value: { done: true } });
+    for (const done of ["true", 1, null, undefined]) expect(validateToggle({ done }).ok).toBe(false);
   });
 });
