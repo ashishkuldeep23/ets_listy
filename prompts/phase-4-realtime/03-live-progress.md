@@ -13,7 +13,7 @@ That way the owner knows how much has been completed.
 
 ## Server
 
-- `publishFolderProgress(folderId)` in `lib/realtime.js`: computes
+- `publishFolderProgress(folderId)` in `lib/realtime.ts`: computes
   `{ itemCount, doneCount }` with one query and sends
   `folder.progress` → `{ folderId, itemCount, doneCount }` on
   `private-user-<id>` to the owner **and** every shared user.

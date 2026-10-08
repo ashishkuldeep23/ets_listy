@@ -11,7 +11,7 @@ managers, ORMs other than Mongoose, UI kits, queues, Docker, microservices).
 
 ## Stack
 
-- Next.js 16 (App Router), React 19, JavaScript (no TypeScript)
+- Next.js 16 (App Router), React 19, **TypeScript** (strict; no plain `.js` source files)
 - Tailwind CSS v4
 - MongoDB + Mongoose
 - Vitest for unit tests
@@ -25,8 +25,9 @@ not sure about.
 ```bash
 npm run dev     # start dev server at http://localhost:3000
 npm test        # unit + API tests once (API tests use an in-memory MongoDB)
+npm run typecheck # tsc --noEmit (also covers tests)
 npm run lint    # ESLint
-npm run build   # production build: run before calling work done
+npm run build   # production build (type-checks too): run before calling work done
 ```
 
 Setup: copy `.env.example` to `.env.local` and set `MONGODB_URI` and
@@ -39,42 +40,52 @@ Feature prompts for upcoming work live in `prompts/` (start with
 
 ```
 src/
-  proxy.js                   # Next 16 "proxy" (was middleware): page redirects for login
+  types.ts                   # shared API types: SessionUser, FolderDTO, Result<T>, …
+  proxy.ts                   # Next 16 "proxy" (was middleware): page redirects for login
   app/
-    page.js                  # home page
-    login/, signup/          # auth pages (use components/AuthForm.js)
-    folders/[id]/page.js     # one folder (components/FolderView.js)
-    api/auth/signup|login|logout|me/route.js
-    api/folders/route.js     # GET my folders (?status=, + counts), POST create
-    api/folders/[id]/route.js # GET, PATCH (rename), DELETE
+    page.tsx                 # home page
+    login/, signup/          # auth pages (use components/AuthForm.tsx)
+    folders/[id]/page.tsx    # one folder (components/FolderView.tsx)
+    api/auth/signup|login|logout|me/route.ts
+    api/folders/route.ts     # GET my folders (?status=, + counts), POST create
+    api/folders/[id]/route.ts # GET, PATCH (rename), DELETE
   components/
-    Header.js                # top bar with user name + Logout
-    AuthForm.js              # shared login/signup form
-    FolderList.js            # home: create / rename / delete folders
-    FolderView.js            # folder page body
-    StatusBadge.js           # folder status label
+    Header.tsx               # top bar with user name + Logout
+    AuthForm.tsx             # shared login/signup form
+    FolderList.tsx           # home: create / rename / delete folders
+    FolderView.tsx           # folder page body
+    StatusBadge.tsx          # folder status label
   lib/
-    db.js          # cached Mongoose connection: always use connectDB()
-    session.js     # sign/verify session JWT (jose); no DB, used by proxy.js
-    auth.js        # hashPassword, getSessionUser, requireUser, session cookie
-    access.js      # getFolderAccess(): the ONLY folder permission check
-    constants.js   # FOLDER_STATUSES: add new statuses here only
-    apiClient.js   # apiFetch(): browser fetch wrapper, use for all UI calls
-    rateLimit.js   # in-memory rate limiter (per process only)
-    safeRedirect.js # safeNextPath() for ?next= redirects
-    limits.js      # size limits shared by validators and schemas
-    validators.js  # request body validation
-    http.js        # jsonError / readJson / serverError / tooManyRequests
+    db.ts          # cached Mongoose connection: always use connectDB()
+    session.ts     # sign/verify session JWT (jose); no DB, used by proxy.ts
+    auth.ts        # hashPassword, getSessionUser, requireUser, session cookie
+    access.ts      # getFolderAccess(): the ONLY folder permission check
+    constants.ts   # FOLDER_STATUSES: add new statuses here only
+    apiClient.ts   # apiFetch(): browser fetch wrapper, use for all UI calls
+    rateLimit.ts   # in-memory rate limiter (per process only)
+    safeRedirect.ts # safeNextPath() for ?next= redirects
+    limits.ts      # size limits shared by validators and schemas
+    validators.ts  # request body validation
+    http.ts        # jsonError / readJson / serverError / tooManyRequests
   models/
-    User.js        # passwordHash is select:false
-    Folder.js      # + serializeFolder(), statusFilter() (missing status = active)
+    User.ts        # passwordHash is select:false
+    Folder.ts      # + serializeFolder(), statusFilter() (missing status = active)
   test/
-    setup.js       # setupTestDb(), makeRequest(), createUserAndCookie()
+    setup.ts       # setupTestDb(), makeRequest(), routeCtx(), json<T>(), createUserAndCookie()
 ```
 
 ## How to write code
 
-- Match the existing style: small functions, plain JavaScript, named exports.
+- Match the existing style: small functions, named exports, `.ts` for logic
+  and `.tsx` only for files with JSX.
+- TypeScript is strict. No `any` (use `unknown` and narrow it), no `@ts-ignore`,
+  and avoid `as` casts except at a trust boundary (e.g. parsing an API
+  response in the browser). Request bodies arrive as `unknown` and become
+  typed only through a validator returning `Result<T>`.
+- Types sent over the API (DTOs) live in `src/types.ts` and are used by both
+  routes and components. Mongoose models declare an `I<Model>` interface and
+  `new Schema<I<Model>>()`, and expose a `serialize<Model>()` that returns the DTO.
+- Dynamic route handlers type their context as `RouteContext<"/api/…/[id]">`.
 - Comments explain **why**, not what. Add a short comment at the top of each
   new file saying what it is for, and on any non-obvious line.
 - API routes follow this order: parse JSON with `readJson` → validate →
@@ -82,7 +93,7 @@ src/
   `serverError(err)` for unexpected errors.
 - Error responses are always `{ error: "message" }` with the correct status
   (400 bad input, 404 not found, 500 unexpected).
-- New limits go in `lib/limits.js` and are used by both the validator and
+- New limits go in `lib/limits.ts` and are used by both the validator and
   the schema.
 
 ## UI theme
@@ -100,19 +111,19 @@ src/
 
 ## How to test
 
-- Every new validator or pure helper in `src/lib/` gets a `*.test.js` file
+- Every new validator or pure helper in `src/lib/` gets a `*.test.ts` file
   next to it. Cover the happy path, each rejection, and bad-type input.
 - API tests call route handlers directly. Use `setupTestDb()`, `makeRequest()`
-  and `createUserAndCookie()` from `src/test/setup.js` (see
-  `src/app/api/auth/auth.test.js`). Always test "another user can't do this".
+  `routeCtx()`, `json<T>()` and `createUserAndCookie()` from `src/test/setup.ts` (see
+  `src/app/api/auth/auth.test.ts`). Always test "another user can't do this".
 - Run the full check once after a batch of changes, not after every edit:
-  `npm test && npm run lint && npm run build`.
+  `npm run typecheck && npm test && npm run lint && npm run build`.
 - Report results honestly: if anything fails, show the output and fix it
   before saying the task is done.
 
 ## Security rules (must follow)
 
-1. **Validate every request body** with a function in `lib/validators.js`.
+1. **Validate every request body** with a function in `lib/validators.ts`.
    Copy only the allowed fields; never pass `request.json()` straight into
    Mongoose (`create`, `update`, `find`). This also blocks NoSQL injection
    like `{ "title": { "$gt": "" } }`.
@@ -124,9 +135,9 @@ src/
    Add every new env var (with an empty value) to `.env.example`.
 5. **No raw HTML from users.** Do not use `dangerouslySetInnerHTML` on user
    data. React escapes text by default, so keep it that way.
-6. **Limit sizes** of every string and array (see `lib/limits.js`).
+6. **Limit sizes** of every string and array (see `lib/limits.ts`).
 7. **Every API route except `/api/auth/*` starts with `requireUser(request)`**
-   and scopes its queries to that user. `src/proxy.js` only redirects pages;
+   and scopes its queries to that user. `src/proxy.ts` only redirects pages;
    it is not an API guard. Never return `passwordHash`, and keep auth
    failures vague ("Invalid email or password").
    Folder and item routes decide access **only** via `getFolderAccess()`

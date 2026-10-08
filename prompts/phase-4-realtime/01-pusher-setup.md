@@ -32,7 +32,7 @@ Comment: values come from pusher.com → Channels → your app → App Keys.
 - `private-folder-<folderId>`: everyone with access to that folder
 - `private-user-<userId>`: one user
 
-## Server: `src/lib/realtime.js`
+## Server: `src/lib/realtime.ts`
 
 - Lazily creates one Pusher client (`useTLS: true`). Missing env → logs once,
   and every publish becomes a no-op.
@@ -55,11 +55,11 @@ Comment: values come from pusher.com → Channels → your app → App Keys.
 
 ## Client
 
-- `src/lib/pusherClient.js`: one shared `pusher-js` instance, created on
+- `src/lib/pusherClient.ts`: one shared `pusher-js` instance, created on
   first use in the browser only, `channelAuthorization: { endpoint: "/api/pusher/auth" }`.
   Returns `null` when the public env vars are missing.
 - `getSocketId()` helper.
-- Hook `src/hooks/useChannel.js`: `useChannel(channelName, handlers)`
+- Hook `src/hooks/useChannel.ts`: `useChannel(channelName, handlers)`
   subscribes on mount, unsubscribes on unmount, and does nothing when Pusher is off.
 - A shared `apiFetch` wrapper (if one doesn't exist yet) that adds the
   `x-pusher-socket-id` header on every write request. Switch existing writes to it.
@@ -70,5 +70,5 @@ Comment: values come from pusher.com → Channels → your app → App Keys.
 - Auth route: logged out 401; bad names (`private-folder-xyz`,
   `presence-folder-…`, `private-user-<other id>`) 403; stranger on folder
   channel 403; owner and shared user 200; own user channel 200; no env 503.
-- `realtime.js`: no env → no-op; thrown error is swallowed and logged;
+- `realtime.ts`: no env → no-op; thrown error is swallowed and logged;
   bad socket id ignored.

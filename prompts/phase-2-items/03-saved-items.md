@@ -14,7 +14,7 @@ away, or **Edit & add** lets them change fields first.
 
 ## Data model
 
-`src/models/SavedItem.js`
+`src/models/SavedItem.ts`
 - `owner`: ObjectId ref User, required, indexed
 - `name`, `category`, `price`, `description`: same rules as `Item` (reuse
   the same validator pieces)

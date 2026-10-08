@@ -12,13 +12,17 @@ These rules apply to all of them.
    may be called `proxy`).
 3. Read the feature's **Needs** line and check that those features exist in
    the code. If something is missing, stop and tell me instead of building it.
-4. Reuse what exists: `connectDB` (`lib/db.js`), `jsonError`/`readJson`/
-   `serverError` (`lib/http.js`), `lib/limits.js`, `lib/validators.js`, and
-   once they exist `requireUser` (`lib/auth.js`), `getFolderAccess`
-   (`lib/access.js`), `lib/rateLimit.js`, and the test helpers in `src/test/setup.js`.
+4. Reuse what exists: `connectDB` (`lib/db.ts`), `jsonError`/`readJson`/
+   `serverError` (`lib/http.ts`), `lib/limits.ts`, `lib/validators.ts`, and
+   once they exist `requireUser` (`lib/auth.ts`), `getFolderAccess`
+   (`lib/access.ts`), `lib/rateLimit.ts`, and the test helpers in `src/test/setup.ts`.
 5. Add only the dependencies the prompt names. Ask before adding anything else.
 
 ## While coding
+
+- **TypeScript only** (`.ts`, `.tsx` for JSX), strict mode, no `any`. Follow
+  the TypeScript rules in `CLAUDE.md`: new API shapes go in `src/types.ts`,
+  models get an `I<Model>` interface and a `serialize<Model>()`.
 
 - Every request body goes through a validator that copies only allowed fields.
 - Every folder or item route decides access **only** through `getFolderAccess`.
@@ -32,13 +36,13 @@ These rules apply to all of them.
 
 ## Tests
 
-- Unit tests for validators and pure helpers (`*.test.js` next to the file).
+- Unit tests for validators and pure helpers (`*.test.ts` next to the file).
 - API tests with `mongodb-memory-server`: call route handlers directly with
   `new Request(...)`. Always include "another user cannot do this" cases.
 
 ## Done when
 
-1. `npm test && npm run lint && npm run build` all pass. Show the summary.
+1. `npm run typecheck && npm test && npm run lint && npm run build` all pass. Show the summary.
    If anything fails, fix it. Never call it done with failures.
 2. If a dependency was added, run `npm audit --omit=dev` and report the result.
 3. If `.env.local` has the needed vars, start `npm run dev`, smoke-test the

@@ -12,14 +12,14 @@ A logged-in user can create, rename, delete and see their own folders
 
 ## Data model
 
-`src/models/Folder.js`
+`src/models/Folder.ts`
 - `owner`: ObjectId ref User, required
 - `name`: string, required, trimmed, max 60
 - timestamps
 - index `{ owner: 1, updatedAt: -1 }`
-- Max 200 folders per user (enforce in the create route). Limits go in `lib/limits.js`.
+- Max 200 folders per user (enforce in the create route). Limits go in `lib/limits.ts`.
 
-## Access helper: `src/lib/access.js`
+## Access helper: `src/lib/access.ts`
 
 `getFolderAccess(userId, folderId)`:
 - invalid ObjectId or folder not found → `null`

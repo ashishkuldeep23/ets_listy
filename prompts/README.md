@@ -48,6 +48,7 @@ Your notes used "list" for two things, so the prompts use fixed names:
 
 ## Decisions taken for you (edit the prompt before running if you disagree)
 
+0. **TypeScript** (strict) for all code. Shared API types live in `src/types.ts`.
 1. **Login** is email + password, built in-house with `bcryptjs` and `jose`. No Google login yet.
 2. **Share permissions**: View is always on, plus two checkboxes: **Can tick items** and **Can edit items**. Edit includes tick.
 3. **Share link**: opening it needs login. The opener gets the link's permissions. The owner can turn it off or reset it.

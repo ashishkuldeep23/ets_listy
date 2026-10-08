@@ -19,7 +19,7 @@ rename, change status, delete or share the folder.
 
 ## Data model
 
-`src/models/Share.js`
+`src/models/Share.ts`
 - `folder`: ObjectId ref Folder, required
 - `owner`: ObjectId ref User, required (who shared it)
 - `sharedWith`: ObjectId ref User, required

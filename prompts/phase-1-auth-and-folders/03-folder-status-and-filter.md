@@ -13,7 +13,7 @@ will be added later, so adding one must only need a change in one file.
 
 ## Changes
 
-`src/lib/constants.js`
+`src/lib/constants.ts`
 ```js
 // Add a new status here only; validators, schema and UI all read from this.
 // `badge` holds theme-token classes (see the UI theme section in CLAUDE.md).

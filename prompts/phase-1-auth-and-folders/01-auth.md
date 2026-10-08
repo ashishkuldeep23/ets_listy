@@ -12,8 +12,8 @@ Users can create an account, log in and log out. Pages are protected: logged-out
 ## Remove the starter code
 
 Delete the starter `List` model, `src/app/api/lists/**`, their validators and
-tests, and the list UI in `src/app/page.js`. Keep `lib/db.js`, `lib/http.js`
-and `lib/limits.js`.
+tests, and the list UI in `src/app/page.tsx`. Keep `lib/db.ts`, `lib/http.ts`
+and `lib/limits.ts`.
 
 ## Dependencies
 
@@ -23,13 +23,13 @@ and `lib/limits.js`.
 
 ## Data model
 
-`src/models/User.js`
+`src/models/User.ts`
 - `name`: string, required, trimmed, max 60
 - `email`: string, required, unique, lowercased, trimmed, max 254
 - `passwordHash`: string, required, `select: false`
 - timestamps
 
-## Auth helpers: `src/lib/auth.js`
+## Auth helpers: `src/lib/auth.ts`
 
 - `hashPassword`, `verifyPassword` (bcryptjs, cost 12)
 - `createSessionToken(userId)` / `verifySessionToken(token)` with `jose`
@@ -42,7 +42,7 @@ and `lib/limits.js`.
 - Cookie: `listy_session`, `httpOnly`, `sameSite: "lax"`, `path: "/"`,
   `secure` in production, `maxAge` 7 days.
 
-`src/lib/rateLimit.js`: simple in-memory limiter (e.g. 10 attempts per IP
+`src/lib/rateLimit.ts`: simple in-memory limiter (e.g. 10 attempts per IP
 per 15 min). Add a comment that it is per-process only and must move to a
 shared store before scaling out.
 
@@ -60,20 +60,20 @@ shared store before scaling out.
 - `/signup`, `/login`: forms with errors. On success redirect to `/`.
   Support a `?next=` param but only allow same-site paths that start with a
   single `/` (reject `//…`, `http…`, `javascript:`). Put this check in
-  `lib/safeRedirect.js` with tests.
+  `lib/safeRedirect.ts` with tests.
 - `/`: logged out → redirect to `/login` (server-side). Logged in → header
   with the user's name and a Logout button, plus a placeholder "Your folders
   will appear here".
-- Shared header component in `src/components/Header.js`.
+- Shared header component in `src/components/Header.tsx`.
 
 ## Tests
 
 - Validators: signup/login, including bad types and `{ "$gt": "" }`.
-- `auth.js`: hash/verify, token round-trip, expired or garbage token → `null`.
+- `auth.ts`: hash/verify, token round-trip, expired or garbage token → `null`.
 - `safeRedirect`: allowed and rejected values.
 - API: signup sets cookie; duplicate email 409; wrong password 401; `/me`
   without cookie 401; rate limit kicks in.
-- Create `src/test/setup.js` (start/stop memory server, `createUserAndCookie()`
+- Create `src/test/setup.ts` (start/stop memory server, `createUserAndCookie()`
   helper) for all later features to reuse.
 
 ## Extra housekeeping

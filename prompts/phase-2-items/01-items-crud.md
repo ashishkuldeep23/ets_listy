@@ -12,7 +12,7 @@ name is required. Category, price and description are optional.
 
 ## Data model
 
-`src/models/Item.js`
+`src/models/Item.ts`
 - `folder`: ObjectId ref Folder, required
 - `name`: string, required, trimmed, max 100
 - `category`: string, optional, trimmed, max 40

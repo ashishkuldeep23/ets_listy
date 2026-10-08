@@ -36,4 +36,4 @@ and shown group by group. The folder also shows price totals.
 - Validators accept/reject group values.
 - API: `groups` list is correct and only from this folder; group rename
   updates only this folder's items; user B cannot rename groups in A's folder (404).
-- Pure helper for totals (`lib/totals.js`) with tests, including items without a price.
+- Pure helper for totals (`lib/totals.ts`) with tests, including items without a price.
