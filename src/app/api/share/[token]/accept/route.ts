@@ -46,7 +46,7 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
     }
 
     if ((await Share.countDocuments({ folder: folder._id })) >= LIMITS.SHARES_PER_FOLDER) {
-      return jsonError("This folder is already shared with the maximum number of people", 400);
+      return jsonError("This list is already shared with the maximum number of people", 400);
     }
     await Share.create({
       folder: folder._id,

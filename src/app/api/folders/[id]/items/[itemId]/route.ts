@@ -4,6 +4,7 @@ import { getFolderAccess } from "@/lib/access";
 import { toItemUpdate } from "@/lib/items";
 import { getSocketId, publishFolderEvent, publishFolderProgress } from "@/lib/realtime";
 import { EVENTS } from "@/lib/channels";
+import { itemExistsMessage, itemNameTaken } from "@/lib/duplicates";
 import { validateUpdateItem } from "@/lib/validators";
 import { jsonError, readJson, serverError } from "@/lib/http";
 import { Item, DONE_BY_NAME, serializeItem, type ItemDoc } from "@/models/Item";
@@ -24,7 +25,7 @@ export async function PATCH(request: Request, ctx: Ctx): Promise<Response> {
     const { id, itemId } = await ctx.params;
     const access = await getFolderAccess(user.id, id);
     if (!access) return jsonError(NOT_FOUND, 404);
-    if (!access.canEdit) return jsonError("You can't edit items in this folder", 403);
+    if (!access.canEdit) return jsonError("You can't edit items in this list", 403);
 
     const body = await readJson(request);
     if (body === undefined) return jsonError("Invalid JSON body", 400);
@@ -32,6 +33,10 @@ export async function PATCH(request: Request, ctx: Ctx): Promise<Response> {
     if (!result.ok) return jsonError(result.error, 400);
 
     if (!mongoose.isValidObjectId(itemId)) return jsonError(NOT_FOUND, 404);
+    const { name } = result.value;
+    if (name !== undefined && (await itemNameTaken(access.folder._id, name, itemId))) {
+      return jsonError(itemExistsMessage(name), 409);
+    }
     // Filtering by folder too means an item from another folder is simply "not found".
     const item = await Item.findOneAndUpdate({ _id: itemId, folder: access.folder._id }, toItemUpdate(result.value), {
       returnDocument: "after",
@@ -57,7 +62,7 @@ export async function DELETE(request: Request, ctx: Ctx): Promise<Response> {
     const { id, itemId } = await ctx.params;
     const access = await getFolderAccess(user.id, id);
     if (!access) return jsonError(NOT_FOUND, 404);
-    if (!access.canEdit) return jsonError("You can't delete items in this folder", 403);
+    if (!access.canEdit) return jsonError("You can't delete items in this list", 403);
 
     if (!mongoose.isValidObjectId(itemId)) return jsonError(NOT_FOUND, 404);
     const { deletedCount } = await Item.deleteOne({ _id: itemId, folder: access.folder._id });

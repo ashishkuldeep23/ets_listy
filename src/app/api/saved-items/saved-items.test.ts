@@ -23,8 +23,8 @@ const saved = {
     deleteSaved(makeRequest(`/api/saved-items/${id}`, { method: "DELETE", cookie }), routeCtx({ id })),
 };
 
-async function newFolder(cookie: string) {
-  return json<FolderDTO>(await createFolder(makeRequest("/api/folders", { method: "POST", body: { name: "Market" }, cookie })));
+async function newFolder(cookie: string, name = "Market") {
+  return json<FolderDTO>(await createFolder(makeRequest("/api/folders", { method: "POST", body: { name }, cookie })));
 }
 const addItem = (cookie: string, folderId: string, body: unknown) =>
   createItem(makeRequest(`/api/folders/${folderId}/items`, { method: "POST", body, cookie }), routeCtx({ id: folderId }));
@@ -53,11 +53,12 @@ describe("save to profile from a folder", () => {
 
   it("saving the same name + category twice (any case) updates instead of duplicating", async () => {
     const { cookie } = await createUserAndCookie();
-    const folder = await newFolder(cookie);
-    await addItem(cookie, folder.id, { name: "Milk", category: "Dairy", price: 60, saveToProfile: true });
-    await addItem(cookie, folder.id, { name: "MILK", category: "dairy", price: 65, saveToProfile: true });
+    // Separate folders: one folder can't hold two items with the same name.
+    const [oct, nov, dec] = [await newFolder(cookie, "Oct"), await newFolder(cookie, "Nov"), await newFolder(cookie, "Dec")];
+    await addItem(cookie, oct.id, { name: "Milk", category: "Dairy", price: 60, saveToProfile: true });
+    await addItem(cookie, nov.id, { name: "MILK", category: "dairy", price: 65, saveToProfile: true });
     // Different category = different saved item.
-    await addItem(cookie, folder.id, { name: "Milk", category: "Tea stall", saveToProfile: true });
+    await addItem(cookie, dec.id, { name: "Milk", category: "Tea stall", saveToProfile: true });
 
     const { savedItems } = await saved.list(cookie);
     expect(savedItems).toHaveLength(2);

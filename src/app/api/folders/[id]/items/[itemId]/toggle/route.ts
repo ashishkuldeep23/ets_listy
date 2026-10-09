@@ -23,7 +23,7 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
     const { id, itemId } = await ctx.params;
     const access = await getFolderAccess(user.id, id);
     if (!access) return jsonError(NOT_FOUND, 404);
-    if (!access.canCheck) return jsonError("You can't tick items in this folder", 403);
+    if (!access.canCheck) return jsonError("You can't tick items in this list", 403);
 
     const body = await readJson(request);
     if (body === undefined) return jsonError("Invalid JSON body", 400);

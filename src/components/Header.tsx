@@ -7,6 +7,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { ListChecks, LogOut, UserRound } from "lucide-react";
 import LiveDot from "@/components/LiveDot";
 import type { SessionUser } from "@/types";
 
@@ -35,18 +36,22 @@ export default function Header() {
 
   return (
     <header className="flex items-center justify-between border-b border-border bg-surface px-4 py-3 sm:px-6">
-      <Link href="/" className="text-xl font-bold text-primary">
+      <Link href="/" className="group flex items-center gap-2 text-xl font-bold text-primary">
+        <ListChecks className="size-6 transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-110" aria-hidden />
         Listy
       </Link>
       <div className="flex items-center gap-3 text-sm">
         <LiveDot />
         {user && (
-          <Link href="/profile" className="text-muted hover:text-fg" title="Profile and saved items">
-            Hi, <span className="text-accent">{user.name}</span>
+          <Link href="/profile" className="flex items-center gap-1.5 text-muted hover:text-fg" title="Profile and saved items">
+            <UserRound className="icon-nudge text-accent" aria-hidden />
+            <span className="hidden sm:inline">Hi, </span>
+            <span className="text-accent">{user.name}</span>
           </Link>
         )}
-        <button onClick={logout} className="btn-ghost">
-          Logout
+        <button onClick={logout} className="btn-ghost" title="Log out">
+          <LogOut className="icon-nudge" aria-hidden />
+          <span className="sr-only">Logout</span>
         </button>
       </div>
     </header>

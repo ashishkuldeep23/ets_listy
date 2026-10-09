@@ -126,3 +126,33 @@ describe("getFolderAccess", () => {
     expect(await getFolderAccess(a.user.id, { $ne: null })).toBeNull();
   });
 });
+
+describe("duplicate folder names", () => {
+  it("rejects a second folder with the same name (any case) with 409", async () => {
+    const { cookie } = await createUserAndCookie();
+    expect((await create(cookie, { name: "Market" })).status).toBe(201);
+
+    const dup = await create(cookie, { name: "  market " });
+    expect(dup.status).toBe(409);
+    expect(await dup.json()).toEqual({ error: 'A list named "market" already exists' });
+    expect(await Folder.countDocuments()).toBe(1);
+  });
+
+  it("rejects renaming onto another folder's name, but allows keeping or re-casing its own", async () => {
+    const { cookie } = await createUserAndCookie();
+    await create(cookie, { name: "Market" });
+    const home = await json<FolderDTO>(await create(cookie, { name: "Home" }));
+    const rename = (name: string) =>
+      updateFolder(makeRequest(`/api/folders/${home.id}`, { method: "PATCH", body: { name }, cookie }), ctx(home.id));
+
+    expect((await rename("MARKET")).status).toBe(409);
+    expect((await rename("HOME")).status).toBe(200);
+  });
+
+  it("lets different users use the same folder name", async () => {
+    const a = await createUserAndCookie({ email: "a@example.com" });
+    const b = await createUserAndCookie({ email: "b@example.com" });
+    expect((await create(a.cookie, { name: "Market" })).status).toBe(201);
+    expect((await create(b.cookie, { name: "Market" })).status).toBe(201);
+  });
+});

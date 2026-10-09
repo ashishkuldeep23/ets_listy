@@ -5,6 +5,8 @@
 // "More details" to keep quick adds fast.
 
 import { useId, useState, type FormEvent } from "react";
+import { Bookmark, Check, LoaderCircle, Plus, SlidersHorizontal, X } from "lucide-react";
+import ErrorText from "@/components/ErrorText";
 import { LIMITS } from "@/lib/limits";
 import type { ItemDTO } from "@/types";
 
@@ -106,17 +108,25 @@ export default function ItemForm({
           className="input min-w-0 flex-1"
         />
         <button disabled={busy} className="btn-primary">
+          {busy ? (
+            <LoaderCircle className="size-4 animate-spin" aria-hidden />
+          ) : mode === "edit" ? (
+            <Check className="icon-nudge" aria-hidden />
+          ) : (
+            <Plus className="icon-nudge" aria-hidden />
+          )}
           {submitLabel}
         </button>
         {onCancel && (
-          <button type="button" onClick={onCancel} className="btn-ghost">
-            Cancel
+          <button type="button" onClick={onCancel} className="btn-ghost" title="Cancel">
+            <X className="icon-nudge" aria-hidden />
+            <span className="sr-only">Cancel</span>
           </button>
         )}
       </div>
 
       {showMore ? (
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid animate-fade-up gap-2 sm:grid-cols-2">
           {showGroup && (
             <>
               <input
@@ -163,7 +173,8 @@ export default function ItemForm({
         </div>
       ) : (
         <button type="button" onClick={() => setShowMore(true)} className="link self-start text-sm">
-          + More details ({showGroup ? "group, " : ""}category, price, description)
+          <SlidersHorizontal className="icon-nudge" aria-hidden />
+          More details ({showGroup ? "group, " : ""}category, price, description)
         </button>
       )}
 
@@ -175,11 +186,12 @@ export default function ItemForm({
             onChange={(e) => setSaveToProfile(e.target.checked)}
             className="size-4 accent-primary"
           />
-          Save to my profile (reuse it in other folders)
+          <Bookmark className={`size-4 transition-colors ${saveToProfile ? "fill-primary text-primary" : ""}`} aria-hidden />
+          Save to my profile (reuse it in other lists)
         </label>
       )}
 
-      {error && <p className="text-sm text-danger">{error}</p>}
+      <ErrorText message={error} />
     </form>
   );
 }

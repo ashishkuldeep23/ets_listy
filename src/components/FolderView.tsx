@@ -12,7 +12,22 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import {
+  ArrowLeft,
+  BookmarkPlus,
+  CircleDashed,
+  CloudOff,
+  IndianRupee,
+  Info,
+  LogOut,
+  SearchX,
+  Share2,
+  ShoppingBasket,
+  Users,
+} from "lucide-react";
+import ErrorText from "@/components/ErrorText";
 import GroupSection from "@/components/GroupSection";
+import Loading from "@/components/Loading";
 import ItemForm, { type ItemFormValues } from "@/components/ItemForm";
 import ItemRow from "@/components/ItemRow";
 import ProgressBar from "@/components/ProgressBar";
@@ -93,7 +108,7 @@ export default function FolderView() {
         setGroups(list.groups);
       })
       .catch((err: unknown) => {
-        if (err instanceof ApiError && err.status === 404) leaveWithNotice("You no longer have access to this folder.");
+        if (err instanceof ApiError && err.status === 404) leaveWithNotice("You no longer have access to this list.");
       });
   }, [loadAll, leaveWithNotice]);
 
@@ -125,7 +140,7 @@ export default function FolderView() {
         // Keep my permissions; only the folder's own fields changed.
         setFolder((prev) => (prev ? { ...prev, name: f.name, status: f.status, updatedAt: f.updatedAt } : prev));
       },
-      [EVENTS.folderDeleted]: () => leaveWithNotice("This folder was deleted by its owner."),
+      [EVENTS.folderDeleted]: () => leaveWithNotice("This list was deleted by its owner."),
       // Someone's permissions changed or they were removed: re-check mine.
       [EVENTS.accessChanged]: () => refetch(),
     },
@@ -134,22 +149,31 @@ export default function FolderView() {
 
   if (notice) {
     return (
-      <div className="card border-primary/40">
-        <p className="mb-3 text-primary">{notice}</p>
+      <div className="card animate-fade-up border-primary/40">
+        <p className="mb-3 flex items-center gap-2 text-primary">
+          <Info className="size-5 shrink-0 animate-pop" aria-hidden />
+          {notice}
+        </p>
         <Link href="/" className="link">
-          ← Back to folders
+          <ArrowLeft className="icon-nudge" aria-hidden />
+          Back to lists
         </Link>
       </div>
     );
   }
 
-  if (state === "loading") return <p className="text-muted">Loading…</p>;
+  if (state === "loading") return <Loading />;
 
   if (state !== "ready" || !folder) {
     return (
-      <div className="card">
-        <h1 className="mb-2 text-xl font-semibold">
-          {state === "notFound" ? "Folder not found" : "Could not load this folder"}
+      <div className="card animate-fade-up">
+        <h1 className="mb-2 flex items-center gap-2 text-xl font-semibold">
+          {state === "notFound" ? (
+            <SearchX className="size-6 animate-pop text-muted" aria-hidden />
+          ) : (
+            <CloudOff className="size-6 animate-pop text-danger" aria-hidden />
+          )}
+          {state === "notFound" ? "List not found" : "Could not load this list"}
         </h1>
         <p className="mb-4 text-muted">
           {state === "notFound"
@@ -157,7 +181,8 @@ export default function FolderView() {
             : "Please check your connection and try again."}
         </p>
         <Link href="/" className="link">
-          ← Back to folders
+          <ArrowLeft className="icon-nudge" aria-hidden />
+          Back to lists
         </Link>
       </div>
     );
@@ -229,7 +254,7 @@ export default function FolderView() {
     });
   }
 
-  // A shared user removes their own access ("Leave folder").
+  // A shared user removes their own access ("Leave list").
   async function leaveFolder() {
     if (!confirm(`Leave "${folder?.name}"? It will disappear from your "Shared with me".`)) return;
     const ok = await run(async () => {
@@ -245,28 +270,32 @@ export default function FolderView() {
 
   return (
     <div>
-      <Link href="/" className="link text-sm">
-        ← All folders
+      <Link href="/" className="link group text-sm">
+        <ArrowLeft className="size-4 transition-transform duration-200 group-hover:-translate-x-1" aria-hidden />
+        All lists
       </Link>
       <div className="mt-2 mb-1 flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold wrap-break-word text-primary">{folder.name}</h1>
         <StatusBadge status={folder.status} />
         {folder.canManage && !showShare && (
-          <button onClick={() => setShowShare(true)} className="btn-secondary ml-auto text-sm">
-            Share
+          <button onClick={() => setShowShare(true)} className="btn-secondary ml-auto text-sm" title="Share">
+            <Share2 className="icon-nudge" aria-hidden />
+            <span className="sr-only">Share</span>
           </button>
         )}
       </div>
       {folder.role === "shared" && (
         <div className="mb-2 flex flex-wrap items-center gap-3 text-sm text-muted">
-          <span>
+          <span className="flex items-center gap-1">
+            <Users className="size-4" aria-hidden />
             Shared by <span className="text-accent">{folder.sharedBy?.name ?? "someone"}</span>
             {!folder.canCheck && " · view only"}
             {folder.canCheck && !folder.canEdit && " · you can tick items"}
             {folder.canEdit && " · you can edit items"}
           </span>
-          <button onClick={leaveFolder} className="ml-auto text-danger hover:underline">
-            Leave folder
+          <button onClick={leaveFolder} className="link-danger ml-auto" title="Leave list">
+            <LogOut className="icon-nudge" aria-hidden />
+            <span className="sr-only">Leave list</span>
           </button>
         </div>
       )}
@@ -300,16 +329,20 @@ export default function FolderView() {
             />
           ) : (
             <button onClick={() => setShowPicker(true)} className="btn-secondary mb-6 text-sm">
-              + Add from saved
+              <BookmarkPlus className="icon-nudge" aria-hidden />
+              Add from saved
             </button>
           )}
         </>
       )}
 
-      {error && <p className="mb-4 text-sm text-danger">{error}</p>}
+      <ErrorText message={error} className="mb-4" />
 
       {items.length === 0 ? (
-        <p className="card text-muted">No items yet.{folder.canEdit && " Add your first one above."}</p>
+        <div className="card flex animate-fade-up flex-col items-center gap-3 py-10 text-center text-muted">
+          <ShoppingBasket className="size-10 animate-float text-primary/70" aria-hidden />
+          <p>No items yet.{folder.canEdit && " Add your first one above."}</p>
+        </div>
       ) : (
         <div className="flex flex-col gap-6">
           {sections.map(([key, sectionItems]) => (
@@ -338,11 +371,17 @@ export default function FolderView() {
 
           <div className="card flex flex-wrap justify-between gap-4">
             <div>
-              <p className="text-sm text-muted">Total</p>
+              <p className="flex items-center gap-1 text-sm text-muted">
+                <IndianRupee className="size-3.5" aria-hidden />
+                Total
+              </p>
               <p className="text-xl font-semibold text-primary">{formatRupees(totals.total)}</p>
             </div>
             <div>
-              <p className="text-sm text-muted">Remaining (not ticked)</p>
+              <p className="flex items-center gap-1 text-sm text-muted">
+                <CircleDashed className="size-3.5" aria-hidden />
+                Remaining (not ticked)
+              </p>
               <p className="text-xl font-semibold text-accent">{formatRupees(totals.remaining)}</p>
             </div>
             {totals.unpriced > 0 && (

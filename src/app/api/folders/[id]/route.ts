@@ -8,6 +8,7 @@ import { Share } from "@/models/Share";
 import { ShareLink } from "@/models/ShareLink";
 import { folderAudience, getSocketId, publishFolderEvent, publishUserEvent } from "@/lib/realtime";
 import { EVENTS } from "@/lib/channels";
+import { folderExistsMessage, folderNameTaken } from "@/lib/duplicates";
 import type { FolderDetailDTO, FolderProgressEvent } from "@/types";
 
 type Ctx = RouteContext<"/api/folders/[id]">;
@@ -15,7 +16,7 @@ type Ctx = RouteContext<"/api/folders/[id]">;
 // Access is decided only by getFolderAccess(): null → 404 (don't reveal
 // the folder exists), missing permission → 403.
 
-const NOT_FOUND = "Folder not found";
+const NOT_FOUND = "List not found";
 
 // GET /api/folders/:id
 export async function GET(request: Request, ctx: Ctx): Promise<Response> {
@@ -43,12 +44,17 @@ export async function PATCH(request: Request, ctx: Ctx): Promise<Response> {
     const { id } = await ctx.params;
     const access = await getFolderAccess(user.id, id);
     if (!access) return jsonError(NOT_FOUND, 404);
-    if (!access.canManage) return jsonError("Only the owner can change this folder", 403);
+    if (!access.canManage) return jsonError("Only the owner can change this list", 403);
 
     const body = await readJson(request);
     if (body === undefined) return jsonError("Invalid JSON body", 400);
     const result = validateUpdateFolder(body);
     if (!result.ok) return jsonError(result.error, 400);
+
+    const { name } = result.value;
+    if (name !== undefined && (await folderNameTaken(access.folder.owner, name, access.folder._id))) {
+      return jsonError(folderExistsMessage(name), 409);
+    }
 
     const folder = await Folder.findByIdAndUpdate(
       id,
@@ -73,7 +79,7 @@ export async function DELETE(request: Request, ctx: Ctx): Promise<Response> {
     const { id } = await ctx.params;
     const access = await getFolderAccess(user.id, id);
     if (!access) return jsonError(NOT_FOUND, 404);
-    if (!access.canManage) return jsonError("Only the owner can delete this folder", 403);
+    if (!access.canManage) return jsonError("Only the owner can delete this list", 403);
 
     // Who to tell, worked out before the shares are deleted.
     const audience = await folderAudience(access.folder._id);

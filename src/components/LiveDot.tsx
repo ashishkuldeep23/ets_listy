@@ -26,7 +26,11 @@ export default function LiveDot() {
   const live = state === "connected";
   return (
     <span className="flex items-center gap-1.5 text-xs text-muted" title={live ? "Live updates on" : "Connecting…"}>
-      <span className={`size-2 rounded-full ${live ? "bg-accent" : "bg-border"}`} />
+      {/* A soft ping ring around the dot while connected. */}
+      <span className="relative flex size-2">
+        {live && <span className="absolute inline-flex size-full animate-ping rounded-full bg-accent opacity-60" />}
+        <span className={`relative inline-flex size-2 rounded-full ${live ? "bg-accent" : "animate-pulse bg-border"}`} />
+      </span>
       {live ? "Live" : "…"}
     </span>
   );

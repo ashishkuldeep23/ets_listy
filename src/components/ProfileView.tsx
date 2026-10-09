@@ -5,7 +5,10 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { ArrowRight, Bookmark, BookmarkX, Mail, Pencil, Search, Tag, Trash2, UserRound, Users } from "lucide-react";
+import ErrorText from "@/components/ErrorText";
 import ItemForm, { type ItemFormValues } from "@/components/ItemForm";
+import Loading from "@/components/Loading";
 import { useSavedItems } from "@/hooks/useSavedItems";
 import { apiFetch } from "@/lib/apiClient";
 import { formatRupees } from "@/lib/format";
@@ -56,38 +59,63 @@ export default function ProfileView() {
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="card">
-        <h1 className="text-2xl font-semibold text-primary">{user?.name ?? "Your profile"}</h1>
-        {user && <p className="text-muted">{user.email}</p>}
-        {sharedCount !== null && (
-          <Link href="/?tab=shared" className="link mt-2 inline-block text-sm">
-            {sharedCount} {sharedCount === 1 ? "folder" : "folders"} shared with you →
-          </Link>
-        )}
+      <section className="card flex animate-fade-up items-start gap-4">
+        <span className="flex size-12 shrink-0 items-center justify-center rounded-full border border-primary/40 bg-primary/10 text-primary">
+          <UserRound className="size-6" aria-hidden />
+        </span>
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold wrap-break-word text-primary">{user?.name ?? "Your profile"}</h1>
+          {user && (
+            <p className="flex items-center gap-1.5 text-muted">
+              <Mail className="size-4 shrink-0" aria-hidden />
+              <span className="min-w-0 break-all">{user.email}</span>
+            </p>
+          )}
+          {sharedCount !== null && (
+            <Link href="/?tab=shared" className="link group mt-2 text-sm">
+              <Users className="size-4" aria-hidden />
+              {sharedCount} {sharedCount === 1 ? "list" : "lists"} shared with you
+              <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-1" aria-hidden />
+            </Link>
+          )}
+        </div>
       </section>
 
       <section className="flex flex-col gap-3">
         <div>
-          <h2 className="text-xl font-semibold">Saved items</h2>
-          <p className="text-sm text-muted">Reuse these in any folder with &ldquo;Add from saved&rdquo;. Only you can see them.</p>
+          <h2 className="flex items-center gap-2 text-xl font-semibold">
+            <Bookmark className="size-5 text-primary" aria-hidden />
+            Saved items
+          </h2>
+          <p className="text-sm text-muted">Reuse these in any list with &ldquo;Add from saved&rdquo;. Only you can see them.</p>
         </div>
 
         <div className="card">
           <ItemForm submitLabel="Save" showGroup={false} onSubmit={create} />
         </div>
 
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search saved items…"
-          aria-label="Search saved items"
-          className="input"
-        />
+        <div className="relative">
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" aria-hidden />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search saved items…"
+            aria-label="Search saved items"
+            className="input w-full pl-9"
+          />
+        </div>
 
-        {(error || actionError) && <p className="text-sm text-danger">{actionError || error}</p>}
-        {loading && <p className="text-muted">Loading…</p>}
+        <ErrorText message={actionError || error} />
+        {loading && <Loading />}
         {!loading && savedItems.length === 0 && (
-          <p className="card text-muted">{query.trim() ? "No saved items match." : "No saved items yet."}</p>
+          <div className="card flex animate-fade-up flex-col items-center gap-3 py-8 text-center text-muted">
+            {query.trim() ? (
+              <Search className="size-8 animate-float text-accent/70" aria-hidden />
+            ) : (
+              <BookmarkX className="size-8 animate-float text-primary/70" aria-hidden />
+            )}
+            <p>{query.trim() ? "No saved items match." : "No saved items yet."}</p>
+          </div>
         )}
 
         <ul className="flex flex-col gap-2">
@@ -131,23 +159,28 @@ function SavedItemRow({
   }
 
   return (
-    <li className="card flex items-start gap-3 py-3">
+    <li className="card flex animate-fade-up items-start gap-3 py-3">
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className="wrap-break-word">{item.name}</span>
           {item.category && (
-            <span className="rounded-full border border-accent/40 px-2 py-0.5 text-xs text-accent">{item.category}</span>
+            <span className="inline-flex items-center gap-1 rounded-full border border-accent/40 px-2 py-0.5 text-xs text-accent">
+              <Tag className="size-3" aria-hidden />
+              {item.category}
+            </span>
           )}
           {item.price !== null && <span className="text-sm font-medium text-primary">{formatRupees(item.price)}</span>}
         </div>
         {item.description && <p className="mt-1 text-sm wrap-break-word text-muted">{item.description}</p>}
       </div>
       <div className="flex shrink-0 gap-3 text-sm">
-        <button onClick={() => setEditing(true)} className="link">
-          Edit
+        <button onClick={() => setEditing(true)} className="link" title="Edit">
+          <Pencil className="icon-nudge" aria-hidden />
+          <span className="sr-only">Edit</span>
         </button>
-        <button onClick={onDelete} className="text-danger hover:underline">
-          Delete
+        <button onClick={onDelete} className="link-danger group" title="Delete">
+          <Trash2 className="size-4 group-hover:animate-wiggle" aria-hidden />
+          <span className="sr-only">Delete</span>
         </button>
       </div>
     </li>

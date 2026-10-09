@@ -23,7 +23,7 @@ export async function PATCH(request: Request, ctx: Ctx): Promise<Response> {
 
     const { id, userId } = await ctx.params;
     const access = await getFolderAccess(user.id, id);
-    if (!access) return jsonError("Folder not found", 404);
+    if (!access) return jsonError("List not found", 404);
     if (!access.canManage) return jsonError("Only the owner can change permissions", 403);
 
     const body = await readJson(request);
@@ -58,7 +58,7 @@ export async function DELETE(request: Request, ctx: Ctx): Promise<Response> {
 
     const { id, userId } = await ctx.params;
     const access = await getFolderAccess(user.id, id);
-    if (!access) return jsonError("Folder not found", 404);
+    if (!access) return jsonError("List not found", 404);
     const leaving = access.role === "shared" && userId === user.id;
     if (!access.canManage && !leaving) return jsonError("Only the owner can remove people", 403);
 

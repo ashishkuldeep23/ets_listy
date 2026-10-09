@@ -9,6 +9,7 @@ import { isValidStatus, validateCreateFolder } from "@/lib/validators";
 import { jsonError, readJson, serverError } from "@/lib/http";
 import { Folder, serializeFolder, statusFilter } from "@/models/Folder";
 import { countItemsByFolder } from "@/lib/items";
+import { folderExistsMessage, folderNameTaken } from "@/lib/duplicates";
 
 const SCOPES: readonly FolderScope[] = ["mine", "shared"];
 
@@ -98,8 +99,9 @@ export async function POST(request: Request): Promise<Response> {
     await connectDB();
     // Cap per user so one account can't fill the database.
     if ((await Folder.countDocuments({ owner: user.id })) >= LIMITS.FOLDERS_PER_USER) {
-      return jsonError(`You can have at most ${LIMITS.FOLDERS_PER_USER} folders`, 400);
+      return jsonError(`You can have at most ${LIMITS.FOLDERS_PER_USER} lists`, 400);
     }
+    if (await folderNameTaken(user.id, result.value.name)) return jsonError(folderExistsMessage(result.value.name), 409);
 
     const folder = await Folder.create({ ...result.value, owner: new mongoose.Types.ObjectId(user.id) });
     return Response.json(serializeFolder(folder), { status: 201 });

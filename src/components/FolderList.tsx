@@ -10,11 +10,29 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import {
+  CalendarClock,
+  Check,
+  ClipboardList,
+  Eye,
+  Inbox,
+  LayoutList,
+  ListPlus,
+  PartyPopper,
+  Pencil,
+  SquareCheck,
+  Trash2,
+  Users,
+  X,
+  type LucideIcon,
+} from "lucide-react";
+import ErrorText from "@/components/ErrorText";
+import Loading from "@/components/Loading";
 import { useChannel } from "@/hooks/useChannel";
 import { useMe } from "@/hooks/useMe";
 import { apiFetch } from "@/lib/apiClient";
 import { EVENTS, userChannel } from "@/lib/channels";
-import { DEFAULT_STATUS, FOLDER_STATUSES, isFolderStatus, type FolderStatus } from "@/lib/constants";
+import { FOLDER_STATUSES, isFolderStatus, type FolderStatus } from "@/lib/constants";
 import ProgressBar from "@/components/ProgressBar";
 import StatusBadge from "@/components/StatusBadge";
 import type {
@@ -40,7 +58,6 @@ export default function FolderList() {
   const [folders, setFolders] = useState<FolderSummaryDTO[]>([]);
   const [counts, setCounts] = useState<FolderCounts | null>(null);
   const [name, setName] = useState("");
-  const [newStatus, setNewStatus] = useState<FolderStatus>(DEFAULT_STATUS);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -120,7 +137,7 @@ export default function FolderList() {
     e.preventDefault();
     if (!name.trim()) return;
     const ok = await mutate(() =>
-      apiFetch("/api/folders", { method: "POST", body: JSON.stringify({ name, status: newStatus }) })
+      apiFetch("/api/folders", { method: "POST", body: JSON.stringify({ name }) })
     );
     if (ok) setName("");
   }
@@ -135,24 +152,25 @@ export default function FolderList() {
 
   const chips: { value: Filter; label: string }[] = [{ value: "all", label: "All" }, ...FOLDER_STATUSES];
 
-  const tabs: { value: FolderScope; label: string }[] = [
-    { value: "mine", label: "My folders" },
-    { value: "shared", label: "Shared with me" },
+  const tabs: { value: FolderScope; label: string; icon: LucideIcon }[] = [
+    { value: "mine", label: "My lists", icon: LayoutList },
+    { value: "shared", label: "Shared with me", icon: Users },
   ];
 
   return (
     <div>
-      <div className="mb-6 flex gap-1 border-b border-border" role="tablist" aria-label="Folders">
+      <div className="mb-6 flex gap-1 border-b border-border" role="tablist" aria-label="Lists">
         {tabs.map((t) => (
           <button
             key={t.value}
             role="tab"
             aria-selected={tab === t.value}
             onClick={() => setTab(t.value)}
-            className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
+            className={`-mb-px flex items-center gap-1.5 border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
               tab === t.value ? "border-primary text-primary" : "border-transparent text-muted hover:text-fg"
             }`}
           >
+            <t.icon className="icon-nudge" aria-hidden />
             {t.label}
           </button>
         ))}
@@ -163,18 +181,14 @@ export default function FolderList() {
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="New folder name (e.g. Market, Oct)"
+            placeholder="List name (e.g. Market, Oct)"
             maxLength={60}
             className="input min-w-0 flex-1"
           />
-          <select value={newStatus} onChange={(e) => setNewStatus(e.target.value as FolderStatus)} className="input" aria-label="Status">
-            {FOLDER_STATUSES.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-          <button className="btn-primary">Add folder</button>
+          <button className="btn-primary w-full sm:w-auto">
+            <ListPlus className="icon-nudge" aria-hidden />
+            Add
+          </button>
         </form>
       )}
 
@@ -198,16 +212,23 @@ export default function FolderList() {
         })}
       </div>
 
-      {error && <p className="mb-4 text-sm text-danger">{error}</p>}
-      {loading && <p className="text-muted">Loading…</p>}
+      <ErrorText message={error} className="mb-4" />
+      {loading && <Loading />}
       {!loading && folders.length === 0 && (
-        <p className="card text-muted">
-          {filter !== "all"
-            ? "No folders with this status."
-            : tab === "mine"
-              ? "No folders yet. Create your first one above."
-              : "Nothing shared with you yet. When someone shares a folder with you, it shows up here."}
-        </p>
+        <div className="card flex animate-fade-up flex-col items-center gap-3 py-10 text-center text-muted">
+          {tab === "mine" ? (
+            <ClipboardList className="size-10 animate-float text-primary/70" aria-hidden />
+          ) : (
+            <Inbox className="size-10 animate-float text-accent/70" aria-hidden />
+          )}
+          <p>
+            {filter !== "all"
+              ? "No lists with this status."
+              : tab === "mine"
+                ? "No lists yet. Create your first one above."
+                : "Nothing shared with you yet. When someone shares a list with you, it shows up here."}
+          </p>
+        </div>
       )}
 
       <ul className="grid gap-4 sm:grid-cols-2">
@@ -241,7 +262,7 @@ function FolderCard({ folder, onUpdate, onDelete }: FolderCardProps) {
   }
 
   return (
-    <li className="card flex flex-col gap-3">
+    <li className="card flex animate-fade-up flex-col gap-3 transition-[translate,border-color] duration-200 hover:-translate-y-0.5 hover:border-primary/40">
       {editing ? (
         <form onSubmit={save} className="flex gap-2">
           <input
@@ -251,7 +272,10 @@ function FolderCard({ folder, onUpdate, onDelete }: FolderCardProps) {
             autoFocus
             className="input min-w-0 flex-1 py-1"
           />
-          <button className="btn-secondary">Save</button>
+          <button className="btn-secondary" title="Save">
+            <Check className="icon-nudge" aria-hidden />
+            <span className="sr-only">Save</span>
+          </button>
           <button
             type="button"
             onClick={() => {
@@ -259,14 +283,20 @@ function FolderCard({ folder, onUpdate, onDelete }: FolderCardProps) {
               setEditing(false);
             }}
             className="btn-ghost"
+            title="Cancel"
           >
-            Cancel
+            <X className="icon-nudge" aria-hidden />
+            <span className="sr-only">Cancel</span>
           </button>
         </form>
       ) : (
         <div className="flex items-start justify-between gap-2">
-          <Link href={`/folders/${folder.id}`} className="text-lg font-semibold wrap-break-word hover:text-primary">
-            {folder.name}
+          <Link
+            href={`/folders/${folder.id}`}
+            className="group flex min-w-0 items-center gap-2 text-lg font-semibold wrap-break-word hover:text-primary"
+          >
+            <ClipboardList className="size-5 shrink-0 text-primary transition-transform duration-200 group-hover:-rotate-6" aria-hidden />
+            <span className="min-w-0">{folder.name}</span>
           </Link>
           <StatusBadge status={folder.status} />
         </div>
@@ -274,7 +304,8 @@ function FolderCard({ folder, onUpdate, onDelete }: FolderCardProps) {
 
       {folder.sharedBy && (
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-muted">
+          <span className="flex items-center gap-1 text-muted">
+            <Users className="size-3.5" aria-hidden />
             Shared by <span className="text-accent">{folder.sharedBy.name}</span>
           </span>
           <PermissionBadges canCheck={folder.canCheck} canEdit={folder.canEdit} />
@@ -286,7 +317,10 @@ function FolderCard({ folder, onUpdate, onDelete }: FolderCardProps) {
           <ProgressBar done={folder.doneCount} total={folder.itemCount} size="sm" />
         </div>
         {folder.itemCount > 0 && folder.doneCount === folder.itemCount && (
-          <span className="shrink-0 text-xs font-medium text-accent">All done ✓</span>
+          <span className="flex shrink-0 animate-pop items-center gap-1 text-xs font-medium text-accent">
+            <PartyPopper className="size-3.5" aria-hidden />
+            All done
+          </span>
         )}
       </div>
 
@@ -307,29 +341,38 @@ function FolderCard({ folder, onUpdate, onDelete }: FolderCardProps) {
           </select>
           {!editing && (
             <div className="flex gap-3">
-              <button onClick={() => setEditing(true)} className="link">
-                Rename
+              <button onClick={() => setEditing(true)} className="link" title="Rename">
+                <Pencil className="icon-nudge" aria-hidden />
+                <span className="sr-only">Rename</span>
               </button>
-              <button onClick={onDelete} className="text-danger hover:underline">
-                Delete
+              <button onClick={onDelete} className="link-danger group" title="Delete">
+                <Trash2 className="size-4 group-hover:animate-wiggle" aria-hidden />
+                <span className="sr-only">Delete</span>
               </button>
             </div>
           )}
         </div>
       )}
-      <span className="text-xs text-muted">Updated {new Date(folder.updatedAt).toLocaleDateString("en-IN")}</span>
+      <span className="flex items-center gap-1 text-xs text-muted">
+        <CalendarClock className="size-3.5" aria-hidden />
+        Updated {new Date(folder.updatedAt).toLocaleDateString("en-IN")}</span>
     </li>
   );
 }
 
 /** Small View / Tick / Edit labels showing what I may do in a shared folder. */
 function PermissionBadges({ canCheck, canEdit }: { canCheck: boolean; canEdit: boolean }) {
-  const badges = ["View", ...(canCheck ? ["Tick"] : []), ...(canEdit ? ["Edit"] : [])];
+  const badges: { label: string; icon: LucideIcon }[] = [
+    { label: "View", icon: Eye },
+    ...(canCheck ? [{ label: "Tick", icon: SquareCheck }] : []),
+    ...(canEdit ? [{ label: "Edit", icon: Pencil }] : []),
+  ];
   return (
     <span className="flex gap-1">
       {badges.map((b) => (
-        <span key={b} className="rounded border border-border px-1.5 text-xs text-muted">
-          {b}
+        <span key={b.label} className="inline-flex items-center gap-1 rounded border border-border px-1.5 text-xs text-muted">
+          <b.icon className="size-3" aria-hidden />
+          {b.label}
         </span>
       ))}
     </span>

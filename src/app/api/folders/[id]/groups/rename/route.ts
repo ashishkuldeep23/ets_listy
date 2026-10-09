@@ -20,8 +20,8 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
 
     const { id } = await ctx.params;
     const access = await getFolderAccess(user.id, id);
-    if (!access) return jsonError("Folder not found", 404);
-    if (!access.canEdit) return jsonError("You can't edit items in this folder", 403);
+    if (!access) return jsonError("List not found", 404);
+    if (!access.canEdit) return jsonError("You can't edit items in this list", 403);
 
     const body = await readJson(request);
     if (body === undefined) return jsonError("Invalid JSON body", 400);

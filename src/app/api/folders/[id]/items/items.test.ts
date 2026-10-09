@@ -223,3 +223,35 @@ describe("folders + items", () => {
     expect(byName.Empty).toMatchObject({ itemCount: 0, doneCount: 0 });
   });
 });
+
+describe("duplicate item names", () => {
+  it("rejects a second item with the same name (any case) in a folder with 409", async () => {
+    const { cookie } = await createUserAndCookie();
+    const folder = await newFolder(cookie);
+    expect((await items.create(cookie, folder.id, { name: "Milk" })).status).toBe(201);
+
+    const dup = await items.create(cookie, folder.id, { name: " MILK " });
+    expect(dup.status).toBe(409);
+    expect(await dup.json()).toEqual({ error: 'An item named "MILK" already exists in this list' });
+    expect(await Item.countDocuments()).toBe(1);
+  });
+
+  it("rejects renaming onto another item's name, but allows editing the item itself", async () => {
+    const { cookie } = await createUserAndCookie();
+    const folder = await newFolder(cookie);
+    await items.create(cookie, folder.id, { name: "Milk" });
+    const bread = await json<ItemDTO>(await items.create(cookie, folder.id, { name: "Bread" }));
+
+    expect((await items.update(cookie, folder.id, bread.id, { name: "milk" })).status).toBe(409);
+    expect((await items.update(cookie, folder.id, bread.id, { name: "Bread", price: 40 })).status).toBe(200);
+    expect((await items.update(cookie, folder.id, bread.id, { price: 50 })).status).toBe(200);
+  });
+
+  it("allows the same item name in different folders", async () => {
+    const { cookie } = await createUserAndCookie();
+    const oct = await newFolder(cookie, "Oct");
+    const nov = await newFolder(cookie, "Nov");
+    expect((await items.create(cookie, oct.id, { name: "Milk" })).status).toBe(201);
+    expect((await items.create(cookie, nov.id, { name: "Milk" })).status).toBe(201);
+  });
+});

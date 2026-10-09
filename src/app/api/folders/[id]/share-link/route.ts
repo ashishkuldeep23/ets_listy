@@ -20,7 +20,7 @@ export async function GET(request: Request, ctx: Ctx): Promise<Response> {
 
     const { id } = await ctx.params;
     const access = await getFolderAccess(user.id, id);
-    if (!access) return jsonError("Folder not found", 404);
+    if (!access) return jsonError("List not found", 404);
     if (!access.canManage) return jsonError("Only the owner can manage the share link", 403);
 
     const body: ShareLinkResponse = { link: await getShareLink(access.folder._id, new URL(request.url).origin) };
@@ -39,7 +39,7 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
 
     const { id } = await ctx.params;
     const access = await getFolderAccess(user.id, id);
-    if (!access) return jsonError("Folder not found", 404);
+    if (!access) return jsonError("List not found", 404);
     if (!access.canManage) return jsonError("Only the owner can manage the share link", 403);
 
     // An empty body is fine here: it just creates the link with defaults.

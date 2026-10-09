@@ -24,8 +24,8 @@ export async function GET(request: Request, ctx: Ctx): Promise<Response> {
 
     const { id } = await ctx.params;
     const access = await getFolderAccess(user.id, id);
-    if (!access) return jsonError("Folder not found", 404);
-    if (!access.canManage) return jsonError("Only the owner can see who this folder is shared with", 403);
+    if (!access) return jsonError("List not found", 404);
+    if (!access.canManage) return jsonError("Only the owner can see who this list is shared with", 403);
 
     const origin = new URL(request.url).origin;
     const [shares, link] = await Promise.all([listShares(access.folder._id), getShareLink(access.folder._id, origin)]);
@@ -50,8 +50,8 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
 
     const { id } = await ctx.params;
     const access = await getFolderAccess(user.id, id);
-    if (!access) return jsonError("Folder not found", 404);
-    if (!access.canManage) return jsonError("Only the owner can share this folder", 403);
+    if (!access) return jsonError("List not found", 404);
+    if (!access.canManage) return jsonError("Only the owner can share this list", 403);
 
     const body = await readJson(request);
     if (body === undefined) return jsonError("Invalid JSON body", 400);
@@ -61,12 +61,12 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
 
     const target = await User.findOne({ email }).select("_id").lean();
     if (!target) return jsonError("No Listy user with this email", 404);
-    if (String(target._id) === user.id) return jsonError("You already own this folder", 400);
+    if (String(target._id) === user.id) return jsonError("You already own this list", 400);
 
     const folderId = access.folder._id;
     const existing = await Share.exists({ folder: folderId, sharedWith: target._id });
     if (!existing && (await Share.countDocuments({ folder: folderId })) >= LIMITS.SHARES_PER_FOLDER) {
-      return jsonError(`A folder can be shared with at most ${LIMITS.SHARES_PER_FOLDER} people`, 400);
+      return jsonError(`A list can be shared with at most ${LIMITS.SHARES_PER_FOLDER} people`, 400);
     }
 
     await Share.updateOne(

@@ -11,7 +11,7 @@ export default function ProgressBar({ done, total, size = "md" }: { done: number
         aria-valuenow={done}
         aria-label="Items done"
       >
-        <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+        <div className="h-full rounded-full bg-primary transition-all duration-500 ease-out" style={{ width: `${pct}%` }} />
       </div>
       <span className={`shrink-0 text-muted ${size === "sm" ? "text-xs" : "text-sm"}`}>
         {done} / {total} done

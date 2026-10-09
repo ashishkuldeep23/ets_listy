@@ -5,6 +5,8 @@
 // folder's share link (copy, permissions, on/off, reset).
 
 import { useEffect, useState, type FormEvent } from "react";
+import { Check, CircleCheck, Copy, Link2, Mail, RefreshCw, Send, Share2, UserMinus, Users, X } from "lucide-react";
+import ErrorText from "@/components/ErrorText";
 import PermissionCheckboxes, { type Permissions } from "@/components/PermissionCheckboxes";
 import { apiFetch } from "@/lib/apiClient";
 import type { ShareDTO, ShareLinkDTO, ShareLinkResponse, ShareListResponse } from "@/types";
@@ -23,6 +25,8 @@ export default function SharePanel({ folderId, onClose }: SharePanelProps) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  // Briefly swaps the Copy icon for a tick after copying.
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -86,13 +90,15 @@ export default function SharePanel({ folderId, onClose }: SharePanelProps) {
     try {
       await navigator.clipboard.writeText(link.url);
       setNotice("Link copied");
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
     } catch {
       setError("Couldn't copy. Select the link and copy it yourself.");
     }
   }
 
   const remove = (s: ShareDTO) => {
-    if (!confirm(`Remove ${s.user.name}'s access to this folder?`)) return;
+    if (!confirm(`Remove ${s.user.name}'s access to this list?`)) return;
     void run(async () => {
       await apiFetch(`${base}/${s.user.id}`, { method: "DELETE" });
       setShares((prev) => prev.filter((x) => x.user.id !== s.user.id));
@@ -101,42 +107,59 @@ export default function SharePanel({ folderId, onClose }: SharePanelProps) {
   };
 
   return (
-    <div className="card mb-6 flex flex-col gap-4 border-primary/40">
+    <div className="card mb-6 flex animate-fade-up flex-col gap-4 border-primary/40">
       <div className="flex items-center justify-between">
-        <h2 className="font-semibold text-primary">Share this folder</h2>
-        <button onClick={onClose} className="btn-ghost text-sm">
-          Close
+        <h2 className="flex items-center gap-2 font-semibold text-primary">
+          <Share2 className="size-5" aria-hidden />
+          Share this list
+        </h2>
+        <button onClick={onClose} className="btn-ghost text-sm" title="Close">
+          <X className="icon-nudge" aria-hidden />
+          <span className="sr-only">Close</span>
         </button>
       </div>
 
       <form onSubmit={shareByEmail} className="flex flex-col gap-2">
         <div className="flex flex-wrap gap-2">
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Their Listy email"
-            required
-            className="input min-w-0 flex-1"
-          />
+          <div className="relative min-w-0 flex-1">
+            <Mail className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" aria-hidden />
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Their Listy email"
+              required
+              className="input w-full pl-9"
+            />
+          </div>
           <button disabled={busy} className="btn-primary">
+            <Send className="icon-nudge" aria-hidden />
             Share
           </button>
         </div>
         <PermissionCheckboxes value={perms} onChange={setPerms} />
       </form>
 
-      {error && <p className="text-sm text-danger">{error}</p>}
-      {notice && <p className="text-sm text-accent">{notice}</p>}
+      <ErrorText message={error} />
+      {notice && (
+        <p key={notice} className="flex animate-fade-up items-center gap-1.5 text-sm text-accent">
+          <CircleCheck className="size-4 animate-pop" aria-hidden />
+          {notice}
+        </p>
+      )}
 
       <div className="flex flex-col gap-2 rounded-md border border-border p-3">
-        <h3 className="text-sm font-semibold text-muted">Share link</h3>
+        <h3 className="flex items-center gap-1.5 text-sm font-semibold text-muted">
+          <Link2 className="size-4" aria-hidden />
+          Share link
+        </h3>
         {!link ? (
           <button
             onClick={() => changeLink(linkUrl, {}, "Link created")}
             disabled={busy}
             className="btn-secondary self-start text-sm"
           >
+            <Link2 className="icon-nudge" aria-hidden />
             Create a share link
           </button>
         ) : (
@@ -149,8 +172,9 @@ export default function SharePanel({ folderId, onClose }: SharePanelProps) {
                 aria-label="Share link"
                 className={`input min-w-0 flex-1 text-sm ${link.enabled ? "" : "line-through opacity-50"}`}
               />
-              <button onClick={copyLink} disabled={!link.enabled} className="btn-secondary text-sm">
-                Copy
+              <button onClick={copyLink} disabled={!link.enabled} className="btn-secondary text-sm" title={copied ? "Copied" : "Copy"}>
+                {copied ? <Check className="size-4 animate-pop" aria-hidden /> : <Copy className="icon-nudge" aria-hidden />}
+                <span className="sr-only">{copied ? "Copied" : "Copy"}</span>
               </button>
             </div>
             <PermissionCheckboxes
@@ -176,9 +200,11 @@ export default function SharePanel({ folderId, onClose }: SharePanelProps) {
                   }
                 }}
                 disabled={busy}
-                className="link"
+                className="link group"
+                title="Reset link"
               >
-                Reset link
+                <RefreshCw className="size-4 transition-transform duration-500 group-hover:rotate-180" aria-hidden />
+                <span className="sr-only">Reset link</span>
               </button>
             </div>
             <p className="text-xs text-muted">Anyone with a Listy account who opens this link joins with these permissions.</p>
@@ -187,19 +213,28 @@ export default function SharePanel({ folderId, onClose }: SharePanelProps) {
       </div>
 
       <div>
-        <h3 className="mb-2 text-sm font-semibold text-muted">People with access</h3>
+        <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-muted">
+          <Users className="size-4" aria-hidden />
+          People with access
+        </h3>
         {shares.length === 0 ? (
           <p className="text-sm text-muted">Only you, so far.</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {shares.map((s) => (
-              <li key={s.user.id} className="flex flex-col gap-1 rounded-md bg-surface-2 p-2">
+              <li key={s.user.id} className="flex animate-fade-up flex-col gap-1 rounded-md bg-surface-2 p-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">{s.user.name}</span>
                   <span className="text-xs text-muted">{s.user.email}</span>
-                  {s.via === "link" && <span className="text-xs text-accent">via link</span>}
-                  <button onClick={() => remove(s)} className="ml-auto text-sm text-danger hover:underline">
-                    Remove
+                  {s.via === "link" && (
+                    <span className="inline-flex items-center gap-1 text-xs text-accent">
+                      <Link2 className="size-3" aria-hidden />
+                      via link
+                    </span>
+                  )}
+                  <button onClick={() => remove(s)} className="link-danger ml-auto text-sm" title="Remove">
+                    <UserMinus className="icon-nudge" aria-hidden />
+                    <span className="sr-only">Remove</span>
                   </button>
                 </div>
                 <PermissionCheckboxes

@@ -18,7 +18,7 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
 
     const { id } = await ctx.params;
     const access = await getFolderAccess(user.id, id);
-    if (!access) return jsonError("Folder not found", 404);
+    if (!access) return jsonError("List not found", 404);
     if (!access.canManage) return jsonError("Only the owner can manage the share link", 403);
 
     const link = await ShareLink.findOneAndUpdate(
@@ -26,7 +26,7 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
       { $set: { token: newShareToken() } },
       { returnDocument: "after" }
     ).lean();
-    if (!link) return jsonError("This folder has no share link yet", 404);
+    if (!link) return jsonError("This list has no share link yet", 404);
 
     const body: ShareLinkResponse = { link: serializeShareLink(link, new URL(request.url).origin) };
     return Response.json(body);

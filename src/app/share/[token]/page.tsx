@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import Header from "@/components/Header";
+import Loading from "@/components/Loading";
 import AcceptShare from "@/components/AcceptShare";
 
-export const metadata: Metadata = { title: "Shared folder · Listy" };
+export const metadata: Metadata = { title: "Shared list · Listy" };
 
 // /share/<token>: join a folder through its share link.
 export default function SharePage() {
@@ -11,7 +12,7 @@ export default function SharePage() {
     <>
       <Header />
       <main className="mx-auto w-full max-w-3xl flex-1 p-6">
-        <Suspense fallback={<p className="text-muted">Opening shared folder…</p>}>
+        <Suspense fallback={<Loading label="Opening shared list…" />}>
           <AcceptShare />
         </Suspense>
       </main>

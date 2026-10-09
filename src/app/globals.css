@@ -26,11 +26,44 @@
 
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Small, quick motions for icons and cards (used as animate-pop, animate-fade-up, …). */
+  --animate-pop: pop 320ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  --animate-fade-up: fade-up 280ms ease-out both;
+  --animate-wiggle: wiggle 400ms ease-in-out;
+  --animate-float: float 3s ease-in-out infinite;
+
+  @keyframes pop {
+    0% { transform: scale(0.4); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  @keyframes fade-up {
+    from { transform: translateY(6px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  @keyframes wiggle {
+    0%, 100% { transform: rotate(0); }
+    25% { transform: rotate(-12deg); }
+    75% { transform: rotate(12deg); }
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+  }
 }
 
 html {
   /* Tells the browser to draw native controls (checkboxes, scrollbars) dark. */
   color-scheme: dark;
+}
+
+/* Respect the OS "reduce motion" setting: keep the icons, drop the movement. */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 body {
@@ -42,13 +75,13 @@ body {
 /* Shared building blocks, so every page looks the same. */
 @layer components {
   .btn-primary {
-    @apply rounded-md bg-primary px-4 py-2 font-medium text-on-primary transition-colors hover:bg-primary-hover disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md bg-primary px-4 py-2 font-medium text-on-primary transition-colors hover:bg-primary-hover disabled:opacity-50;
   }
   .btn-secondary {
-    @apply rounded-md border border-accent px-3 py-1.5 text-accent transition-colors hover:bg-accent/10 disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md border border-accent px-3 py-1.5 text-accent transition-colors hover:bg-accent/10 disabled:opacity-50;
   }
   .btn-ghost {
-    @apply rounded-md border border-border px-3 py-1.5 text-fg transition-colors hover:bg-surface-2 disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-fg transition-colors hover:bg-surface-2 disabled:opacity-50;
   }
   .input {
     @apply rounded-md border border-border bg-surface px-3 py-2 text-fg placeholder:text-muted outline-none focus:border-accent focus:ring-1 focus:ring-accent;
@@ -57,6 +90,17 @@ body {
     @apply rounded-lg border border-border bg-surface p-4;
   }
   .link {
-    @apply text-accent underline-offset-4 hover:text-accent-hover hover:underline;
+    @apply inline-flex items-center gap-1 text-accent underline-offset-4 hover:text-accent-hover hover:underline;
+  }
+  /* Red text button (Delete, Remove, Leave). */
+  .link-danger {
+    @apply inline-flex items-center gap-1 text-danger underline-offset-4 hover:underline;
+  }
+  /* Icon inside a button or link: grows a little when it is hovered. */
+  .icon-nudge {
+    @apply size-4 shrink-0 transition-transform duration-200;
+  }
+  :is(button, a, label):hover > .icon-nudge {
+    transform: scale(1.15);
   }
 }

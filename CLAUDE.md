@@ -13,6 +13,7 @@ managers, ORMs other than Mongoose, UI kits, queues, Docker, microservices).
 
 - Next.js 16 (App Router), React 19, **TypeScript** (strict; no plain `.js` source files)
 - Tailwind CSS v4
+- lucide-react for icons
 - MongoDB + Mongoose
 - Vitest for unit tests
 
@@ -69,7 +70,9 @@ src/
     AuthForm.tsx             # shared login/signup form
     FolderList.tsx           # home: tabs My folders / Shared with me (?tab=shared), status chips
     FolderView.tsx           # folder page body
-    StatusBadge.tsx          # folder status label
+    StatusBadge.tsx          # folder status label + icon (STATUS_ICONS, one per status)
+    ErrorText.tsx            # red error line with alert icon (use for every error message)
+    Loading.tsx              # spinner + "Loading…"
     ProgressBar.tsx          # "3 / 10 done" bar
     ItemForm.tsx             # add / edit item (name required, rest optional)
     ItemRow.tsx              # one item: tick, details, edit, delete
@@ -100,6 +103,7 @@ src/
     pusherClient.ts # browser: shared pusher-js client, getSocketId()
     totals.ts      # computeTotals() (in paise), groupItems() (A–Z, ungrouped last)
     savedItems.ts  # upsertSavedItem() (no duplicates, limit), updateSavedItem(), escapeRegex()
+    duplicates.ts  # folderNameTaken() / itemNameTaken(): case-insensitive, routes answer 409
     rateLimit.ts   # in-memory rate limiter (per process only)
     safeRedirect.ts # safeNextPath() for ?next= redirects
     limits.ts      # size limits shared by validators and schemas
@@ -149,7 +153,12 @@ src/
 - Never use raw hex values or Tailwind palette colours (`zinc-500`,
   `red-600`, …) and never use `dark:` variants. Add a token instead.
 - Reuse the component classes from `globals.css`: `btn-primary`,
-  `btn-secondary`, `btn-ghost`, `input`, `card`, `link`.
+  `btn-secondary`, `btn-ghost`, `input`, `card`, `link`, `link-danger`.
+- Icons: `lucide-react`, always `aria-hidden` next to visible text (icon-only
+  buttons need a `title` and an `sr-only` label). `icon-nudge` = size-4 icon
+  that grows on hover. Motion tokens in `@theme`: `animate-pop`,
+  `animate-fade-up`, `animate-wiggle`, `animate-float` (all disabled by
+  prefers-reduced-motion). Keep motion small and quick.
 
 ## How to test
 

@@ -4,6 +4,7 @@
 // collapse, rename) and its item rows.
 
 import { useState, type FormEvent, type ReactNode } from "react";
+import { Check, ChevronRight, Layers, Pencil, X } from "lucide-react";
 import { LIMITS } from "@/lib/limits";
 
 interface GroupSectionProps {
@@ -36,7 +37,11 @@ export default function GroupSection({ name, done, total, canEdit, onRename, chi
           aria-expanded={open}
           className="flex items-center gap-2 text-left font-semibold"
         >
-          <span className="text-muted">{open ? "▾" : "▸"}</span>
+          <ChevronRight
+            className={`size-4 text-muted transition-transform duration-200 ${open ? "rotate-90" : ""}`}
+            aria-hidden
+          />
+          {name && <Layers className="size-4 text-accent" aria-hidden />}
           <span className={name ? "text-accent" : "text-muted"}>{name ?? "Ungrouped"}</span>
           <span className="text-xs font-normal text-muted">
             {done} / {total}
@@ -44,8 +49,9 @@ export default function GroupSection({ name, done, total, canEdit, onRename, chi
         </button>
 
         {canEdit && name && !renaming && (
-          <button onClick={() => setRenaming(true)} className="link ml-auto text-xs">
-            Rename group
+          <button onClick={() => setRenaming(true)} className="link ml-auto text-xs" title="Rename group">
+            <Pencil className="size-3.5" aria-hidden />
+            <span className="sr-only">Rename group</span>
           </button>
         )}
         {renaming && (
@@ -58,7 +64,10 @@ export default function GroupSection({ name, done, total, canEdit, onRename, chi
               aria-label="New group name"
               className="input py-1 text-sm"
             />
-            <button className="btn-secondary text-sm">Save</button>
+            <button className="btn-secondary text-sm" title="Save">
+              <Check className="icon-nudge" aria-hidden />
+              <span className="sr-only">Save</span>
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -66,14 +75,16 @@ export default function GroupSection({ name, done, total, canEdit, onRename, chi
                 setRenaming(false);
               }}
               className="btn-ghost text-sm"
+              title="Cancel"
             >
-              Cancel
+              <X className="icon-nudge" aria-hidden />
+              <span className="sr-only">Cancel</span>
             </button>
           </form>
         )}
       </div>
 
-      {open && <ul className="flex flex-col gap-2">{children}</ul>}
+      {open && <ul className="flex animate-fade-up flex-col gap-2">{children}</ul>}
     </section>
   );
 }

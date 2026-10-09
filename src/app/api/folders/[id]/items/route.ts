@@ -4,6 +4,7 @@ import { countItems } from "@/lib/items";
 import { upsertSavedItem } from "@/lib/savedItems";
 import { getSocketId, publishFolderEvent, publishFolderProgress } from "@/lib/realtime";
 import { EVENTS } from "@/lib/channels";
+import { itemExistsMessage, itemNameTaken } from "@/lib/duplicates";
 import { LIMITS } from "@/lib/limits";
 import { validateCreateItem, withoutGroup } from "@/lib/validators";
 import { jsonError, readJson, serverError } from "@/lib/http";
@@ -12,7 +13,7 @@ import type { ItemListResponse } from "@/types";
 
 type Ctx = RouteContext<"/api/folders/[id]/items">;
 
-const NOT_FOUND = "Folder not found";
+const NOT_FOUND = "List not found";
 
 // GET /api/folders/:id/items → { items, total, done, groups }. Any access may read.
 export async function GET(request: Request, ctx: Ctx): Promise<Response> {
@@ -50,7 +51,7 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
     const { id } = await ctx.params;
     const access = await getFolderAccess(user.id, id);
     if (!access) return jsonError(NOT_FOUND, 404);
-    if (!access.canEdit) return jsonError("You can't add items to this folder", 403);
+    if (!access.canEdit) return jsonError("You can't add items to this list", 403);
 
     const body = await readJson(request);
     if (body === undefined) return jsonError("Invalid JSON body", 400);
@@ -59,7 +60,11 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
 
     const folderId = access.folder._id;
     if ((await Item.countDocuments({ folder: folderId })) >= LIMITS.ITEMS_PER_FOLDER) {
-      return jsonError(`A folder can hold at most ${LIMITS.ITEMS_PER_FOLDER} items`, 400);
+      return jsonError(`A list can hold at most ${LIMITS.ITEMS_PER_FOLDER} items`, 400);
+    }
+
+    if (await itemNameTaken(folderId, result.value.fields.name)) {
+      return jsonError(itemExistsMessage(result.value.fields.name), 409);
     }
 
     // New items go to the end of the list.

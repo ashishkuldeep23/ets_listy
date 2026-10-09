@@ -7,6 +7,8 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { ArrowLeft, Unlink } from "lucide-react";
+import Loading from "@/components/Loading";
 import { ApiError, apiFetch } from "@/lib/apiClient";
 import type { AcceptShareResponse } from "@/types";
 
@@ -32,14 +34,18 @@ export default function AcceptShare() {
     };
   }, [token, router]);
 
-  if (!error) return <p className="text-muted">Opening shared folder…</p>;
+  if (!error) return <Loading label="Opening shared list…" />;
 
   return (
-    <div className="card">
-      <h1 className="mb-2 text-xl font-semibold">Can&apos;t open this link</h1>
+    <div className="card animate-fade-up">
+      <h1 className="mb-2 flex items-center gap-2 text-xl font-semibold">
+        <Unlink className="size-5 animate-pop text-danger" aria-hidden />
+        Can&apos;t open this link
+      </h1>
       <p className="mb-4 text-muted">{error}</p>
       <Link href="/" className="link">
-        ← Go to your folders
+        <ArrowLeft className="icon-nudge" aria-hidden />
+        Go to your lists
       </Link>
     </div>
   );

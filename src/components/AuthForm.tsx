@@ -5,7 +5,9 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, type ChangeEvent, type FormEvent } from "react";
+import { useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
+import { ListChecks, LoaderCircle, LockKeyhole, LogIn, Mail, UserPlus, UserRound } from "lucide-react";
+import ErrorText from "@/components/ErrorText";
 import { safeNextPath } from "@/lib/safeRedirect";
 
 export default function AuthForm({ mode }: { mode: "login" | "signup" }) {
@@ -52,45 +54,61 @@ export default function AuthForm({ mode }: { mode: "login" | "signup" }) {
 
   return (
     <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center p-6">
-      <h1 className="mb-1 text-3xl font-bold text-primary">Listy</h1>
+      <h1 className="mb-1 flex items-center gap-2 text-3xl font-bold text-primary">
+        <ListChecks className="size-8 animate-float" aria-hidden />
+        Listy
+      </h1>
       <p className="mb-6 text-muted">{isSignup ? "Create your account" : "Log in to your account"}</p>
 
       <form onSubmit={onSubmit} className="flex flex-col gap-3">
         {isSignup && (
-          <input
-            value={form.name}
-            onChange={update("name")}
-            placeholder="Your name"
-            autoComplete="name"
-            maxLength={60}
-            required
-            className="input"
-          />
+          <Field icon={<UserRound />}>
+            <input
+              value={form.name}
+              onChange={update("name")}
+              placeholder="Your name"
+              autoComplete="name"
+              maxLength={60}
+              required
+              className="input w-full pl-9"
+            />
+          </Field>
         )}
-        <input
-          type="email"
-          value={form.email}
-          onChange={update("email")}
-          placeholder="Email"
-          autoComplete="email"
-          maxLength={254}
-          required
-          className="input"
-        />
-        <input
-          type="password"
-          value={form.password}
-          onChange={update("password")}
-          placeholder={isSignup ? "Password (min 8 characters)" : "Password"}
-          autoComplete={isSignup ? "new-password" : "current-password"}
-          minLength={isSignup ? 8 : undefined}
-          required
-          className="input"
-        />
+        <Field icon={<Mail />}>
+          <input
+            type="email"
+            value={form.email}
+            onChange={update("email")}
+            placeholder="Email"
+            autoComplete="email"
+            maxLength={254}
+            required
+            className="input w-full pl-9"
+          />
+        </Field>
+        <Field icon={<LockKeyhole />}>
+          <input
+            type="password"
+            value={form.password}
+            onChange={update("password")}
+            placeholder={isSignup ? "Password (min 8 characters)" : "Password"}
+            autoComplete={isSignup ? "new-password" : "current-password"}
+            minLength={isSignup ? 8 : undefined}
+            required
+            className="input w-full pl-9"
+          />
+        </Field>
 
-        {error && <p className="text-sm text-danger">{error}</p>}
+        <ErrorText message={error} />
 
         <button disabled={busy} className="btn-primary">
+          {busy ? (
+            <LoaderCircle className="size-4 animate-spin" aria-hidden />
+          ) : isSignup ? (
+            <UserPlus className="icon-nudge" aria-hidden />
+          ) : (
+            <LogIn className="icon-nudge" aria-hidden />
+          )}
           {busy ? "Please wait…" : isSignup ? "Sign up" : "Log in"}
         </button>
       </form>
@@ -102,5 +120,17 @@ export default function AuthForm({ mode }: { mode: "login" | "signup" }) {
         </Link>
       </p>
     </main>
+  );
+}
+
+/** An input with a small icon inside its left edge (the input needs `pl-9`). */
+function Field({ icon, children }: { icon: ReactNode; children: ReactNode }) {
+  return (
+    <div className="relative">
+      <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted [&>svg]:size-4" aria-hidden>
+        {icon}
+      </span>
+      {children}
+    </div>
   );
 }
