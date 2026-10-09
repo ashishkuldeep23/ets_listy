@@ -59,9 +59,10 @@ src/
     api/folders/[id]/shares/[userId]/route.ts    # PATCH perms (canManage), DELETE (canManage, or self = leave)
     api/folders/[id]/share-link/route.ts         # GET, POST { canCheck, canEdit, enabled } (canManage)
     api/folders/[id]/share-link/reset/route.ts   # POST: new token (canManage)
+    api/share/[token]/route.ts                   # GET: PUBLIC read-only view (no login, rate-limited, doneBy hidden)
     api/share/[token]/accept/route.ts            # POST: join via link (logged in, rate-limited)
     api/pusher/auth/route.ts                     # private channel auth (folder: getFolderAccess, user: self)
-    share/[token]/page.tsx   # opens a share link (components/AcceptShare.tsx)
+    share/[token]/page.tsx   # open to everyone: logged in → join; guest → PublicListView (read-only)
     api/saved-items/route.ts                     # GET ?q= (my saved items), POST (upsert)
     api/saved-items/[id]/route.ts                # PATCH (409 on duplicate), DELETE
     profile/page.tsx         # my profile + saved items (components/ProfileView.tsx)
@@ -80,7 +81,8 @@ src/
     SavedItemPicker.tsx      # "Add from saved" panel (Add / Edit & add)
     SharePanel.tsx           # owner: share by email, people + permissions
     PermissionCheckboxes.tsx # View (always) / Can tick / Can edit
-    AcceptShare.tsx          # /share/[token] body
+    AcceptShare.tsx          # /share/[token] body (join, or read-only view for guests)
+    PublicListView.tsx       # guest read-only list + Log in / Sign up prompt
     LiveDot.tsx              # header "Live" indicator (hidden if Pusher is off)
     ProfileView.tsx          # profile page body
   hooks/
@@ -92,7 +94,8 @@ src/
     session.ts     # sign/verify session JWT (jose); no DB, used by proxy.ts
     auth.ts        # hashPassword, getSessionUser, requireUser, session cookie
     access.ts      # getFolderAccess() (one folder) + sharedWithUser() (bulk): the ONLY permission logic
-    shares.ts      # listShares(), getShareLink(), serializeShareLink() for the owner view
+    shares.ts      # listShares(), getShareLink(), serializeShareLink() for the owner view;
+                   #   getPublicShare(): the ONLY data guests can read
     constants.ts   # FOLDER_STATUSES: add new statuses here only
     apiClient.ts   # apiFetch<T>() + ApiError: browser fetch wrapper, use for all UI calls
     items.ts       # toItemUpdate() (null → $unset), countItems(), countItemsByFolder()
@@ -188,9 +191,13 @@ src/
    data. React escapes text by default, so keep it that way.
 6. **Limit sizes** of every string and array (see `lib/limits.ts`). User text
    used in a `$regex` must go through `escapeRegex()` first.
-7. **Every API route except `/api/auth/*` starts with `requireUser(request)`**
+7. **Every API route except `/api/auth/*` and `GET /api/share/[token]` starts with `requireUser(request)`**
    and scopes its queries to that user. `src/proxy.ts` only redirects pages;
-   it is not an API guard. Never return `passwordHash`, and keep auth
+   it is not an API guard. The one public data route, `GET /api/share/[token]`,
+   is read-only, needs an enabled share link, is rate-limited, and returns
+   only `getPublicShare()` output (list name + status, items with `doneBy`
+   null: no user names, emails or ids of people). Anything beyond reading
+   needs login. Never return `passwordHash`, and keep auth
    failures vague ("Invalid email or password").
    Sharing is decided **only** inside `getFolderAccess()` (owner, or a Share
    row). Edit always includes tick: write permissions via

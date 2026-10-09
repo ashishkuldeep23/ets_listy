@@ -1,8 +1,12 @@
 import type { Types } from "mongoose";
+import { connectDB } from "@/lib/db";
+import { Folder } from "@/models/Folder";
+import { Item, serializeItem, type ItemDoc } from "@/models/Item";
+import { DEFAULT_STATUS } from "@/lib/constants";
 import { Share, type IShare } from "@/models/Share";
 import { User } from "@/models/User";
 import { ShareLink, type IShareLink } from "@/models/ShareLink";
-import type { ShareDTO, ShareLinkDTO } from "@/types";
+import type { PublicShareResponse, ShareDTO, ShareLinkDTO } from "@/types";
 
 // Helpers for the share routes.
 
@@ -45,4 +49,24 @@ export function serializeShareLink(link: IShareLink, origin: string): ShareLinkD
 export async function getShareLink(folderId: Types.ObjectId, origin: string): Promise<ShareLinkDTO | null> {
   const link = await ShareLink.findOne({ folder: folderId }).lean();
   return link ? serializeShareLink(link, origin) : null;
+}
+
+/**
+ * The public, read-only view behind a share link, or null if the token is
+ * unknown, the link is off, or the list is gone. Check the token's shape
+ * (isShareTokenShape) before calling.
+ */
+export async function getPublicShare(token: string): Promise<PublicShareResponse | null> {
+  await connectDB();
+  const link = await ShareLink.findOne({ token, enabled: true }).select("folder").lean();
+  if (!link) return null;
+  const folder = await Folder.findById(link.folder).select("name status").lean();
+  if (!folder) return null;
+
+  // doneBy is not populated and is cleared: anonymous visitors never see who ticked what.
+  const items = await Item.find({ folder: folder._id }).sort({ position: 1 }).lean<ItemDoc[]>();
+  return {
+    list: { name: folder.name, status: folder.status ?? DEFAULT_STATUS },
+    items: items.map((i) => ({ ...serializeItem(i), doneBy: null })),
+  };
 }

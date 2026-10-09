@@ -89,6 +89,16 @@ export interface AcceptShareResponse {
   folderId: string;
 }
 
+/**
+ * GET /api/share/:token: what anyone with the link sees, logged in or not.
+ * Only the list's name and status plus its items, with `doneBy` always null
+ * so no user names reach anonymous visitors.
+ */
+export interface PublicShareResponse {
+  list: Pick<FolderDTO, "name" | "status">;
+  items: ItemDTO[];
+}
+
 /** An item inside a folder. Optional fields are null when not set. */
 export interface ItemDTO {
   id: string;

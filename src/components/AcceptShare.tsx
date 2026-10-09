@@ -1,14 +1,15 @@
 "use client";
 
-// Opens a share link: asks the API to add the folder to my "Shared with
-// me", then goes to it. Logged-out visitors never get here: src/proxy.ts
-// sends them to /login?next=/share/<token> first.
+// Opens a share link. Logged in: asks the API to add the folder to my
+// "Shared with me", then goes to it. Logged out (the API answers 401): shows
+// the read-only public view instead, which offers Log in / Sign up.
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ArrowLeft, Unlink } from "lucide-react";
 import Loading from "@/components/Loading";
+import PublicListView from "@/components/PublicListView";
 import { ApiError, apiFetch } from "@/lib/apiClient";
 import type { AcceptShareResponse } from "@/types";
 
@@ -16,6 +17,7 @@ export default function AcceptShare() {
   const { token } = useParams<{ token: string }>();
   const router = useRouter();
   const [error, setError] = useState("");
+  const [guest, setGuest] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -24,7 +26,7 @@ export default function AcceptShare() {
       .catch((err: unknown) => {
         if (cancelled) return;
         if (err instanceof ApiError && err.status === 401) {
-          router.replace(`/login?next=${encodeURIComponent(`/share/${token}`)}`);
+          setGuest(true);
           return;
         }
         setError(err instanceof Error ? err.message : "Something went wrong");
@@ -34,6 +36,7 @@ export default function AcceptShare() {
     };
   }, [token, router]);
 
+  if (guest) return <PublicListView token={token} />;
   if (!error) return <Loading label="Opening shared list…" />;
 
   return (

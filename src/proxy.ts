@@ -3,6 +3,7 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/session";
 
 // Runs before every page request (Next.js 16 "proxy", formerly middleware).
 // Logged-out users are sent to /login; logged-in users skip /login and /signup.
+// /share/<token> is open to everyone: logged-out visitors get a read-only view.
 // This only checks the token signature. API routes still check the user
 // in the database themselves, so this is not the only line of defence.
 
@@ -13,8 +14,9 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   const loggedIn = Boolean(await verifySessionToken(token));
   const onAuthPage = AUTH_PAGES.includes(pathname);
+  const onPublicPage = pathname.startsWith("/share/");
 
-  if (!loggedIn && !onAuthPage) {
+  if (!loggedIn && !onAuthPage && !onPublicPage) {
     const url = new URL("/login", request.url);
     // Remember where the user was going so login can send them back.
     if (pathname !== "/") url.searchParams.set("next", pathname + search);

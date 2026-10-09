@@ -2,31 +2,36 @@
 
 // Top bar with the app name, the logged-in user's name and Logout.
 // Pages are already protected by src/proxy.js; if /api/auth/me still says
-// 401 (e.g. the account was deleted), send the user to login.
+// 401 (e.g. the account was deleted), send the user to login, except on
+// pages open to guests (`allowGuest`), which show a Log in button instead.
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ListChecks, LogOut, UserRound } from "lucide-react";
+import { ListChecks, LogIn, LogOut, UserRound } from "lucide-react";
 import LiveDot from "@/components/LiveDot";
 import type { SessionUser } from "@/types";
 
-export default function Header() {
+export default function Header({ allowGuest = false }: { allowGuest?: boolean }) {
   const router = useRouter();
   const [user, setUser] = useState<SessionUser | null>(null);
+  // For a guest: the page to come back to after logging in (null = not a guest).
+  // Read in the effect, not via usePathname, so pages can still be prerendered.
+  const [guestNext, setGuestNext] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/auth/me")
       .then((res): Promise<SessionUser> | null => {
         if (res.status === 401) {
-          router.replace("/login");
+          if (allowGuest) setGuestNext(window.location.pathname);
+          else router.replace("/login");
           return null;
         }
         return res.ok ? res.json() : null;
       })
       .then((data) => data && setUser(data))
       .catch(() => {});
-  }, [router]);
+  }, [router, allowGuest]);
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
@@ -49,10 +54,17 @@ export default function Header() {
             <span className="text-accent">{user.name}</span>
           </Link>
         )}
-        <button onClick={logout} className="btn-ghost" title="Log out">
-          <LogOut className="icon-nudge" aria-hidden />
-          <span className="sr-only">Logout</span>
-        </button>
+        {guestNext !== null ? (
+          <Link href={`/login?next=${encodeURIComponent(guestNext)}`} className="btn-primary text-sm">
+            <LogIn className="icon-nudge" aria-hidden />
+            Log in
+          </Link>
+        ) : (
+          <button onClick={logout} className="btn-ghost" title="Log out">
+            <LogOut className="icon-nudge" aria-hidden />
+            <span className="sr-only">Logout</span>
+          </button>
+        )}
       </div>
     </header>
   );
