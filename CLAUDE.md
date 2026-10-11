@@ -61,10 +61,12 @@ src/
     api/folders/[id]/share-link/reset/route.ts   # POST: new token (canManage)
     api/share/[token]/route.ts                   # GET: PUBLIC read-only view (no login, rate-limited, doneBy hidden)
     api/share/[token]/accept/route.ts            # POST: join via link (logged in, rate-limited)
+    api/share/[token]/items/[itemId]/toggle/route.ts # POST { done }: tick via link, no login (link canCheck, rate-limited, live "by Guest")
     api/pusher/auth/route.ts                     # private channel auth (folder: getFolderAccess, user: self)
     share/[token]/page.tsx   # open to everyone: logged in → join; guest → PublicListView (read-only)
     api/saved-items/route.ts                     # GET ?q= (my saved items), POST (upsert)
     api/saved-items/[id]/route.ts                # PATCH (409 on duplicate), DELETE
+    api/users/search/route.ts                    # GET ?q= (name/email prefix, max 8, not me; invite box)
     profile/page.tsx         # my profile + saved items (components/ProfileView.tsx)
   components/
     Header.tsx               # top bar with user name + Logout
@@ -78,6 +80,7 @@ src/
     ItemForm.tsx             # add / edit item (name required, rest optional)
     ItemRow.tsx              # one item: tick, details, edit, delete
     GroupSection.tsx         # collapsible group of items + rename
+    Combobox.tsx             # input + suggestion dropdown (groups, price units, people)
     SavedItemPicker.tsx      # "Add from saved" panel (Add / Edit & add)
     SharePanel.tsx           # owner: share by email, people + permissions
     PermissionCheckboxes.tsx # View (always) / Can tick / Can edit

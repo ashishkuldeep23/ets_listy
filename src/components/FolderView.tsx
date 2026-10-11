@@ -2,7 +2,8 @@
 
 // Folder page body: the folder header, progress, its items grouped into
 // sections (add, edit, tick, delete, rename a group), price totals, and
-// "Add from saved" to reuse items from my profile.
+// "Add from saved" to reuse items from my profile. Anyone who can see the
+// list (even view-only) can bookmark an item into their own saved items.
 // Loads the folder by the id in the URL; the API answers 404 for folders
 // that don't exist or that I can't access, shown as "not found". What I may
 // do (tick / edit / manage) comes from the API, not guessed here.
@@ -11,7 +12,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   BookmarkPlus,
@@ -35,6 +36,7 @@ import SavedItemPicker from "@/components/SavedItemPicker";
 import SharePanel from "@/components/SharePanel";
 import StatusBadge from "@/components/StatusBadge";
 import { useChannel } from "@/hooks/useChannel";
+import { useSavedItems } from "@/hooks/useSavedItems";
 import { ApiError, apiFetch } from "@/lib/apiClient";
 import { EVENTS, folderChannel } from "@/lib/channels";
 import { formatRupees } from "@/lib/format";
@@ -43,9 +45,9 @@ import type { FolderDTO, FolderDetailDTO, ItemDTO, ItemListResponse, SavedItemDT
 
 type LoadState = "loading" | "ready" | "notFound" | "error";
 
-/** Adds a group name to a sorted suggestion list (no duplicates). */
-const withGroup = (groups: string[], group: string | null) =>
-  !group || groups.includes(group) ? groups : [...groups, group].sort((a, b) => a.localeCompare(b));
+/** Same identity as the server uses for saved items: name + category, any case. */
+const savedKey = (name: string, category: string | null) =>
+  JSON.stringify([name.trim().toLowerCase(), (category ?? "").trim().toLowerCase()]);
 
 /** True if `incoming` is at least as new as `current` (drops late, out-of-order events). */
 const isNewer = (incoming: ItemDTO, current: ItemDTO) =>
@@ -56,7 +58,6 @@ export default function FolderView() {
   const router = useRouter();
   const [folder, setFolder] = useState<FolderDetailDTO | null>(null);
   const [items, setItems] = useState<ItemDTO[]>([]);
-  const [groups, setGroups] = useState<string[]>([]);
   const [state, setState] = useState<LoadState>("loading");
   const [error, setError] = useState("");
   const [showPicker, setShowPicker] = useState(false);
@@ -65,6 +66,9 @@ export default function FolderView() {
   const [prefill, setPrefill] = useState<{ key: number; item: SavedItemDTO } | null>(null);
   // Banner for things other people did (folder deleted, access removed).
   const [notice, setNotice] = useState("");
+  // My saved items, only to show which items here are already bookmarked.
+  const { savedItems, reload: reloadSaved } = useSavedItems("");
+  const savedKeys = useMemo(() => new Set(savedItems.map((s) => savedKey(s.name, s.category))), [savedItems]);
 
   const loadAll = useCallback(() => {
     const base = `/api/folders/${encodeURIComponent(id)}`;
@@ -78,7 +82,6 @@ export default function FolderView() {
         if (cancelled) return;
         setFolder(f);
         setItems(list.items);
-        setGroups(list.groups);
         setState("ready");
       })
       .catch((err: unknown) => {
@@ -105,7 +108,6 @@ export default function FolderView() {
       .then(([f, list]) => {
         setFolder(f);
         setItems(list.items);
-        setGroups(list.groups);
       })
       .catch((err: unknown) => {
         if (err instanceof ApiError && err.status === 404) leaveWithNotice("You no longer have access to this list.");
@@ -119,12 +121,10 @@ export default function FolderView() {
       [EVENTS.itemCreated]: (data) => {
         const { item } = data as { item: ItemDTO };
         setItems((prev) => (prev.some((i) => i.id === item.id) ? prev : [...prev, item]));
-        setGroups((prev) => withGroup(prev, item.group));
       },
       [EVENTS.itemUpdated]: (data) => {
         const { item } = data as { item: ItemDTO };
         setItems((prev) => prev.map((i) => (i.id === item.id && isNewer(item, i) ? item : i)));
-        setGroups((prev) => withGroup(prev, item.group));
       },
       [EVENTS.itemDeleted]: (data) => {
         const { itemId } = data as { itemId: string };
@@ -133,7 +133,6 @@ export default function FolderView() {
       [EVENTS.groupRenamed]: (data) => {
         const { from, to } = data as { from: string; to: string | null };
         setItems((prev) => prev.map((i) => (i.group === from ? { ...i, group: to } : i)));
-        setGroups((prev) => withGroup(prev.filter((g) => g !== from), to));
       },
       [EVENTS.folderUpdated]: (data) => {
         const { folder: f } = data as { folder: FolderDTO };
@@ -189,10 +188,10 @@ export default function FolderView() {
   }
 
   const itemsUrl = `/api/folders/${folder.id}/items`;
+  // Group suggestions come from the items themselves, so a group disappears once its last item does.
+  const groups = [...new Set(items.flatMap((i) => (i.group ? [i.group] : [])))].sort((a, b) => a.localeCompare(b));
   const replaceItem = (updated: ItemDTO) => setItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
 
-  // Keeps group suggestions in sync after an add / edit / rename.
-  const rememberGroup = (group: string | null) => setGroups((prev) => withGroup(prev, group));
 
   // Runs a request and shows its error message; returns true on success.
   async function run(fn: () => Promise<void>): Promise<boolean> {
@@ -206,32 +205,54 @@ export default function FolderView() {
     }
   }
 
+  // The bookmark only reflects the server; a failed reload just leaves it as it was.
+  const refreshSaved = () => reloadSaved().catch(() => {});
+
   const addItem = (values: ItemFormValues) =>
     run(async () => {
       const item = await apiFetch<ItemDTO>(itemsUrl, { method: "POST", body: JSON.stringify(values) });
       setItems((prev) => [...prev, item]);
-      rememberGroup(item.group);
       setPrefill(null);
+      if (values.saveToProfile) void refreshSaved();
     });
 
   // "Add" in the saved-items panel: copy the saved item into this folder as-is.
   const addFromSaved = (saved: SavedItemDTO, group: string | null) =>
-    addItem({ name: saved.name, category: saved.category, price: saved.price, description: saved.description, group });
+    addItem({
+      name: saved.name,
+      category: saved.category,
+      price: saved.price,
+      priceUnit: saved.priceUnit,
+      quantity: saved.quantity,
+      description: saved.description,
+      group,
+    });
+
+  // Bookmark on an item: copy it into MY saved items (works on lists shared with me too).
+  // Group is left out: it belongs to this list.
+  const saveToProfile = (item: ItemDTO) =>
+    run(async () => {
+      const { name, category, price, priceUnit, quantity, description } = item;
+      await apiFetch("/api/saved-items", {
+        method: "POST",
+        body: JSON.stringify({ name, category, price, priceUnit, quantity, description }),
+      });
+      await refreshSaved();
+    });
 
   const saveItem = (item: ItemDTO, values: ItemFormValues) =>
     run(async () => {
       const updated = await apiFetch<ItemDTO>(`${itemsUrl}/${item.id}`, { method: "PATCH", body: JSON.stringify(values) });
       replaceItem(updated);
-      rememberGroup(updated.group);
     });
 
   // Renames a group on the server, then mirrors it locally (no refetch needed).
-  const renameGroup = (from: string, to: string | null) =>
+  const renameGroup = (from: string, typed: string | null) =>
     run(async () => {
+      // Renaming onto another group in a different case merges into it (the server does the same).
+      const to = typed && (groups.find((g) => g !== from && g.toLowerCase() === typed.toLowerCase()) ?? typed);
       await apiFetch(`/api/folders/${folder.id}/groups/rename`, { method: "POST", body: JSON.stringify({ from, to }) });
       setItems((prev) => prev.map((i) => (i.group === from ? { ...i, group: to } : i)));
-      setGroups((prev) => prev.filter((g) => g !== from));
-      rememberGroup(to);
     });
 
   // Optimistic: flip the tick at once, then undo it if the server says no.
@@ -353,6 +374,7 @@ export default function FolderView() {
               done={sectionItems.filter((i) => i.done).length}
               total={sectionItems.length}
               canEdit={folder.canEdit}
+              groups={groups}
               onRename={(to) => renameGroup(key, to)}
             >
               {sectionItems.map((item) => (
@@ -365,6 +387,8 @@ export default function FolderView() {
                   onToggle={() => toggleItem(item)}
                   onSave={(values) => saveItem(item, values)}
                   onDelete={() => deleteItem(item)}
+                  onSaveToProfile={() => saveToProfile(item)}
+                  saved={savedKeys.has(savedKey(item.name, item.category))}
                 />
               ))}
             </GroupSection>

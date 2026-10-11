@@ -58,7 +58,7 @@ export async function getShareLink(folderId: Types.ObjectId, origin: string): Pr
  */
 export async function getPublicShare(token: string): Promise<PublicShareResponse | null> {
   await connectDB();
-  const link = await ShareLink.findOne({ token, enabled: true }).select("folder").lean();
+  const link = await ShareLink.findOne({ token, enabled: true }).select("folder canCheck canEdit").lean();
   if (!link) return null;
   const folder = await Folder.findById(link.folder).select("name status").lean();
   if (!folder) return null;
@@ -68,5 +68,6 @@ export async function getPublicShare(token: string): Promise<PublicShareResponse
   return {
     list: { name: folder.name, status: folder.status ?? DEFAULT_STATUS },
     items: items.map((i) => ({ ...serializeItem(i), doneBy: null })),
+    canCheck: link.canCheck || link.canEdit,
   };
 }

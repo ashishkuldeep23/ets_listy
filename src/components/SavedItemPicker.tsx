@@ -9,7 +9,8 @@ import { BookmarkPlus, CircleCheck, PencilLine, Plus, Search, X } from "lucide-r
 import ErrorText from "@/components/ErrorText";
 import Loading from "@/components/Loading";
 import { useSavedItems } from "@/hooks/useSavedItems";
-import { formatRupees } from "@/lib/format";
+import { formatPriceLine } from "@/lib/format";
+import { lineTotal } from "@/lib/totals";
 import type { SavedItemDTO } from "@/types";
 
 interface SavedItemPickerProps {
@@ -81,7 +82,9 @@ export default function SavedItemPicker({ groups, onAdd, onEditAndAdd, onClose }
             <div className="min-w-0 flex-1">
               <span className="wrap-break-word">{item.name}</span>
               {item.category && <span className="ml-2 text-xs text-accent">{item.category}</span>}
-              {item.price !== null && <span className="ml-2 text-sm text-primary">{formatRupees(item.price)}</span>}
+              {formatPriceLine(item, lineTotal(item)) && (
+                <span className="ml-2 text-sm text-primary">{formatPriceLine(item, lineTotal(item))}</span>
+              )}
             </div>
             {addedIds.includes(item.id) && (
               <span className="flex animate-pop items-center gap-1 text-xs text-accent">

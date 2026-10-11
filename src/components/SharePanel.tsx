@@ -3,12 +3,16 @@
 // Owner-only panel on the folder page: share by email with permissions,
 // see / change / remove the people it's shared with, and manage the
 // folder's share link (copy, permissions, on/off, reset).
+// The invite box suggests Listy users as you type a name or email.
 
 import { useEffect, useState, type FormEvent } from "react";
 import { Check, CircleCheck, Copy, Link2, Mail, RefreshCw, Send, Share2, UserMinus, Users, X } from "lucide-react";
+import Combobox from "@/components/Combobox";
 import ErrorText from "@/components/ErrorText";
 import PermissionCheckboxes, { type Permissions } from "@/components/PermissionCheckboxes";
+import { useUserSearch } from "@/hooks/useUserSearch";
 import { apiFetch } from "@/lib/apiClient";
+import { LIMITS } from "@/lib/limits";
 import type { ShareDTO, ShareLinkDTO, ShareLinkResponse, ShareListResponse } from "@/types";
 
 interface SharePanelProps {
@@ -27,6 +31,22 @@ export default function SharePanel({ folderId, onClose }: SharePanelProps) {
   const [busy, setBusy] = useState(false);
   // Briefly swaps the Copy icon for a tick after copying.
   const [copied, setCopied] = useState(false);
+  // People matching what's typed in the invite box (not shown once a full email was picked).
+  const search = useUserSearch(email);
+  const sharedIds = new Set(shares.map((s) => s.user.id));
+  const peopleOptions = search.users
+    .filter((u) => u.email !== email.trim().toLowerCase())
+    .map((u) => ({
+      key: u.id,
+      value: u.email,
+      label: (
+        <span className="flex flex-wrap items-baseline gap-x-2">
+          <span className="font-medium">{u.name}</span>
+          <span className="min-w-0 break-all text-xs text-muted">{u.email}</span>
+          {sharedIds.has(u.id) && <span className="text-xs text-accent">has access · will update permissions</span>}
+        </span>
+      ),
+    }));
 
   useEffect(() => {
     let cancelled = false;
@@ -66,7 +86,13 @@ export default function SharePanel({ folderId, onClose }: SharePanelProps) {
 
   async function shareByEmail(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!email.trim()) return;
+    const typed = email.trim();
+    if (!typed) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(typed)) {
+      setNotice("");
+      setError("Pick a person from the suggestions, or type their full email");
+      return;
+    }
     const ok = await run(
       () => apiFetch<ShareListResponse>(base, { method: "POST", body: JSON.stringify({ email, ...perms }) }),
       `Shared with ${email.trim()}`
@@ -205,12 +231,22 @@ export default function SharePanel({ folderId, onClose }: SharePanelProps) {
         </h3>
         <div className="flex flex-wrap gap-2">
           <div className="relative min-w-0 flex-1">
-            <Mail className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" aria-hidden />
-            <input
-              type="email"
+            <Combobox
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Their Listy email"
+              onChange={setEmail}
+              options={peopleOptions}
+              loading={search.loading}
+              emptyText={
+                search.error ||
+                (email.trim().length >= LIMITS.USER_SEARCH_MIN && !email.includes("@") ? "No one found. Try their email." : "")
+              }
+              leading={
+                <Mail className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" aria-hidden />
+              }
+              inputMode="email"
+              placeholder="Name or email of a Listy user"
+              aria-label="Name or email of the person to invite"
+              maxLength={LIMITS.EMAIL_MAX}
               required
               className="input w-full pl-9"
             />

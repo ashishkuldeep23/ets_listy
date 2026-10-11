@@ -1,11 +1,11 @@
 import mongoose from "mongoose";
 import { requireUser } from "@/lib/auth";
 import { getFolderAccess } from "@/lib/access";
-import { toItemUpdate } from "@/lib/items";
+import { existingGroupName, toItemUpdate } from "@/lib/items";
 import { getSocketId, publishFolderEvent, publishFolderProgress } from "@/lib/realtime";
 import { EVENTS } from "@/lib/channels";
 import { itemExistsMessage, itemNameTaken } from "@/lib/duplicates";
-import { validateUpdateItem } from "@/lib/validators";
+import { validateUpdateItem, withPriceUnitRule } from "@/lib/validators";
 import { jsonError, readJson, serverError } from "@/lib/http";
 import { Item, DONE_BY_NAME, serializeItem, type ItemDoc } from "@/models/Item";
 
@@ -16,7 +16,7 @@ type Ctx = RouteContext<"/api/folders/[id]/items/[itemId]">;
 
 const NOT_FOUND = "Item not found";
 
-// PATCH /api/folders/:id/items/:itemId: any of { name, category, price, description, group }; null clears a field.
+// PATCH /api/folders/:id/items/:itemId: any of { name, category, price, priceUnit, quantity, description, group }; null clears a field.
 export async function PATCH(request: Request, ctx: Ctx): Promise<Response> {
   try {
     const user = await requireUser(request);
@@ -33,18 +33,31 @@ export async function PATCH(request: Request, ctx: Ctx): Promise<Response> {
     if (!result.ok) return jsonError(result.error, 400);
 
     if (!mongoose.isValidObjectId(itemId)) return jsonError(NOT_FOUND, 404);
-    const { name } = result.value;
+    const fields = withPriceUnitRule(result.value);
+    const { name } = fields;
     if (name !== undefined && (await itemNameTaken(access.folder._id, name, itemId))) {
       return jsonError(itemExistsMessage(name), 409);
     }
+    if (fields.group) fields.group = await existingGroupName(access.folder._id, fields.group, { exceptItemId: itemId });
     // Filtering by folder too means an item from another folder is simply "not found".
-    const item = await Item.findOneAndUpdate({ _id: itemId, folder: access.folder._id }, toItemUpdate(result.value), {
+    let item = await Item.findOneAndUpdate({ _id: itemId, folder: access.folder._id }, toItemUpdate(fields), {
       returnDocument: "after",
       runValidators: true,
     })
       .populate(DONE_BY_NAME)
       .lean<ItemDoc>();
     if (!item) return jsonError(NOT_FOUND, 404);
+    // Only a unit was sent, but the item has no price: drop the stray unit.
+    if (item.priceUnit && item.price == null) {
+      item = await Item.findOneAndUpdate(
+        { _id: item._id },
+        { $unset: { priceUnit: "" } },
+        { returnDocument: "after" }
+      )
+        .populate(DONE_BY_NAME)
+        .lean<ItemDoc>();
+      if (!item) return jsonError(NOT_FOUND, 404);
+    }
     const dto = serializeItem(item);
     await publishFolderEvent(id, EVENTS.itemUpdated, { item: dto }, getSocketId(request));
     return Response.json(dto);

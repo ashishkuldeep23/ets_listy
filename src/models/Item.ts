@@ -10,12 +10,18 @@ export interface IItem {
   name: string;
   category?: string;
   price?: number;
+  /** What the price is for (e.g. "kg"); only kept while there is a price. */
+  priceUnit?: string;
+  /** How many; unset = 1. */
+  quantity?: number;
   description?: string;
   /** Group name inside the folder; unset = ungrouped. */
   group?: string;
   done: boolean;
   /** Who ticked it; cleared when unticked. */
   doneBy?: Types.ObjectId;
+  /** Ticked by someone with the share link who wasn't logged in. */
+  doneByGuest?: boolean;
   doneAt?: Date;
   /** Sort order inside the folder (new items go last). */
   position: number;
@@ -30,10 +36,13 @@ const itemSchema = new mongoose.Schema<IItem>(
     name: { type: String, required: true, trim: true, maxlength: LIMITS.ITEM_NAME_MAX },
     category: { type: String, trim: true, maxlength: LIMITS.ITEM_CATEGORY_MAX },
     price: { type: Number, min: 0, max: LIMITS.ITEM_PRICE_MAX },
+    priceUnit: { type: String, trim: true, maxlength: LIMITS.ITEM_PRICE_UNIT_MAX },
+    quantity: { type: Number, min: 0, max: LIMITS.ITEM_QUANTITY_MAX },
     description: { type: String, trim: true, maxlength: LIMITS.ITEM_DESCRIPTION_MAX },
     group: { type: String, trim: true, maxlength: LIMITS.ITEM_GROUP_MAX },
     done: { type: Boolean, default: false },
     doneBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    doneByGuest: { type: Boolean },
     doneAt: { type: Date },
     position: { type: Number, required: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
@@ -61,6 +70,9 @@ function toUserRef(doneBy: ItemDoc["doneBy"]): UserRef | null {
   return { id: String(doneBy._id), name: doneBy.name };
 }
 
+/** Shown as "by Guest" for ticks made through the share link without logging in. */
+export const GUEST_USER: UserRef = { id: "guest", name: "Guest" };
+
 /** The shape the API sends to clients. */
 export function serializeItem(item: ItemDoc): ItemDTO {
   return {
@@ -69,10 +81,12 @@ export function serializeItem(item: ItemDoc): ItemDTO {
     name: item.name,
     category: item.category ?? null,
     price: item.price ?? null,
+    priceUnit: item.price != null ? (item.priceUnit ?? null) : null,
+    quantity: item.quantity ?? null,
     description: item.description ?? null,
     group: item.group ?? null,
     done: item.done,
-    doneBy: toUserRef(item.doneBy),
+    doneBy: toUserRef(item.doneBy) ?? (item.done && item.doneByGuest ? GUEST_USER : null),
     doneAt: item.doneAt ?? null,
     position: item.position,
     createdAt: item.createdAt,

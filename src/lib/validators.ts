@@ -169,6 +169,28 @@ function cleanPrice(v: unknown): Clean<number | null | undefined> {
   return { value: Math.round(v * 100) / 100 }; // keep paise, drop float noise
 }
 
+/**
+ * Price unit ("kg", "piece"): like optional text, but "per kg" and "/kg"
+ * are stored as just "kg", since the UI always shows it as "₹40 / kg".
+ */
+function cleanPriceUnit(v: unknown): Clean<string | null | undefined> {
+  const t = cleanOptionalText(v, "priceUnit", LIMITS.ITEM_PRICE_UNIT_MAX);
+  if (t.error !== undefined || !t.value) return t;
+  return { value: t.value.replace(/^(\/|per\s+)/i, "").trim() || null };
+}
+
+/** Quantity: undefined = not sent, null = clear (counts as 1), else a number above 0 up to the max. */
+function cleanQuantity(v: unknown): Clean<number | null | undefined> {
+  if (v === undefined) return { value: undefined };
+  if (v === null) return { value: null };
+  if (typeof v !== "number" || !Number.isFinite(v) || v <= 0 || v > LIMITS.ITEM_QUANTITY_MAX) {
+    return { error: `quantity must be a number above 0 and at most ${LIMITS.ITEM_QUANTITY_MAX}` };
+  }
+  // 3 decimals is enough for "1.25 kg"; something like 0.0001 would round to 0, which isn't a quantity.
+  const q = Math.round(v * 1000) / 1000;
+  return q > 0 ? { value: q } : { error: "quantity is too small" };
+}
+
 function cleanItemName(name: unknown): Clean<string> {
   if (typeof name !== "string") return { error: "name must be a string" };
   const n = name.trim();
@@ -182,6 +204,8 @@ export interface ItemFieldsInput {
   name?: string;
   category?: string | null;
   price?: number | null;
+  priceUnit?: string | null;
+  quantity?: number | null;
   description?: string | null;
   group?: string | null;
 }
@@ -192,6 +216,10 @@ function readOptionalItemFields(body: Body, out: ItemFieldsInput): string | null
   if (category.error !== undefined) return category.error;
   const price = cleanPrice(body.price);
   if (price.error !== undefined) return price.error;
+  const priceUnit = cleanPriceUnit(body.priceUnit);
+  if (priceUnit.error !== undefined) return priceUnit.error;
+  const quantity = cleanQuantity(body.quantity);
+  if (quantity.error !== undefined) return quantity.error;
   const description = cleanOptionalText(body.description, "description", LIMITS.ITEM_DESCRIPTION_MAX);
   if (description.error !== undefined) return description.error;
   const group = cleanOptionalText(body.group, "group", LIMITS.ITEM_GROUP_MAX);
@@ -199,6 +227,8 @@ function readOptionalItemFields(body: Body, out: ItemFieldsInput): string | null
 
   if (category.value !== undefined) out.category = category.value;
   if (price.value !== undefined) out.price = price.value;
+  if (priceUnit.value !== undefined) out.priceUnit = priceUnit.value;
+  if (quantity.value !== undefined) out.quantity = quantity.value;
   if (description.value !== undefined) out.description = description.value;
   if (group.value !== undefined) out.group = group.value;
   return null;
@@ -210,7 +240,7 @@ export interface CreateItemInput extends ItemFieldsInput {
 
 /**
  * Body for POST /api/folders/:id/items:
- * { name, category?, price?, description?, group?, saveToProfile? }.
+ * { name, category?, price?, priceUnit?, quantity?, description?, group?, saveToProfile? }.
  * `saveToProfile` is returned separately because it is not an item field.
  */
 export function validateCreateItem(body: unknown): Result<{ fields: CreateItemInput; saveToProfile: boolean }> {
@@ -282,7 +312,15 @@ export function withoutGroup<T extends { group?: unknown }>(fields: T): Omit<T, 
   return rest;
 }
 
-/** Body for POST /api/saved-items: { name, category?, price?, description? }. */
+/**
+ * A unit means nothing without a price: clearing the price (null) also
+ * clears the unit, unless the request says what to do with the unit itself.
+ */
+export function withPriceUnitRule<T extends ItemFieldsInput>(fields: T): T {
+  return fields.price === null && fields.priceUnit === undefined ? { ...fields, priceUnit: null } : fields;
+}
+
+/** Body for POST /api/saved-items: { name, category?, price?, priceUnit?, quantity?, description? }. */
 export function validateCreateSavedItem(body: unknown): Result<CreateSavedItemInput> {
   const r = validateCreateItem(body);
   return r.ok ? { ok: true, value: withoutGroup(r.value.fields) } : r;

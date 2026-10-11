@@ -1,6 +1,6 @@
 import { requireUser } from "@/lib/auth";
 import { getFolderAccess } from "@/lib/access";
-import { countItems } from "@/lib/items";
+import { countItems, existingGroupName } from "@/lib/items";
 import { upsertSavedItem } from "@/lib/savedItems";
 import { getSocketId, publishFolderEvent, publishFolderProgress } from "@/lib/realtime";
 import { EVENTS } from "@/lib/channels";
@@ -42,7 +42,7 @@ export async function GET(request: Request, ctx: Ctx): Promise<Response> {
   }
 }
 
-// POST /api/folders/:id/items: { name, category?, price?, description?, group?, saveToProfile? }. Needs canEdit.
+// POST /api/folders/:id/items: { name, category?, price?, priceUnit?, quantity?, description?, group?, saveToProfile? }. Needs canEdit.
 export async function POST(request: Request, ctx: Ctx): Promise<Response> {
   try {
     const user = await requireUser(request);
@@ -70,6 +70,9 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
     // New items go to the end of the list.
     const last = await Item.findOne({ folder: folderId }).sort({ position: -1 }).select("position").lean();
     const { fields: input, saveToProfile } = result.value;
+    if (input.group) input.group = await existingGroupName(folderId, input.group);
+    // A unit without a price means nothing ("/ kg" of what?).
+    if (input.price == null) delete input.priceUnit;
 
     // Save to the CURRENT user's profile (not the folder owner's). Done before
     // creating the item so a full library fails the request cleanly.

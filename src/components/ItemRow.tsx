@@ -1,11 +1,13 @@
 "use client";
 
-// One item in a folder: tick box, details, and edit / delete.
+// One item in a folder: tick box, details, edit / delete, and a bookmark
+// to save it to my profile (e.g. from a list someone shared with me).
 
 import { useState } from "react";
-import { Check, Pencil, Tag, Trash2, UserCheck } from "lucide-react";
+import { Bookmark, BookmarkCheck, Check, LoaderCircle, Pencil, Tag, Trash2, UserCheck } from "lucide-react";
 import ItemForm, { type ItemFormValues } from "@/components/ItemForm";
-import { formatRupees } from "@/lib/format";
+import { formatPriceLine } from "@/lib/format";
+import { lineTotal } from "@/lib/totals";
 import type { ItemDTO } from "@/types";
 
 interface ItemRowProps {
@@ -17,10 +19,32 @@ interface ItemRowProps {
   onToggle: () => void;
   onSave: (values: ItemFormValues) => Promise<boolean>;
   onDelete: () => void;
+  /** Shows the "Save to my profile" bookmark. Return true when saved. */
+  onSaveToProfile?: () => Promise<boolean>;
+  /** Already in my saved items (same name + category). */
+  saved?: boolean;
 }
 
-export default function ItemRow({ item, groups, canCheck, canEdit, onToggle, onSave, onDelete }: ItemRowProps) {
+export default function ItemRow({
+  item,
+  groups,
+  canCheck,
+  canEdit,
+  onToggle,
+  onSave,
+  onDelete,
+  onSaveToProfile,
+  saved = false,
+}: ItemRowProps) {
   const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  async function saveToProfile() {
+    if (!onSaveToProfile || saving || saved) return;
+    setSaving(true);
+    await onSaveToProfile();
+    setSaving(false);
+  }
 
   if (editing) {
     return (
@@ -69,7 +93,9 @@ export default function ItemRow({ item, groups, canCheck, canEdit, onToggle, onS
               {item.category}
             </span>
           )}
-          {item.price !== null && <span className="text-sm font-medium text-primary">{formatRupees(item.price)}</span>}
+          {formatPriceLine(item, lineTotal(item)) && (
+            <span className="text-sm font-medium text-primary">{formatPriceLine(item, lineTotal(item))}</span>
+          )}
         </div>
         {item.description && <p className="mt-1 text-sm wrap-break-word text-muted">{item.description}</p>}
         {item.done && item.doneBy && (
@@ -80,16 +106,38 @@ export default function ItemRow({ item, groups, canCheck, canEdit, onToggle, onS
         )}
       </div>
 
-      {canEdit && (
+      {(canEdit || onSaveToProfile) && (
         <div className="flex shrink-0 gap-3 text-sm">
-          <button onClick={() => setEditing(true)} className="link" title="Edit">
-            <Pencil className="icon-nudge" aria-hidden />
-            <span className="sr-only">Edit</span>
-          </button>
-          <button onClick={onDelete} className="link-danger group" title="Delete">
-            <Trash2 className="size-4 group-hover:animate-wiggle" aria-hidden />
-            <span className="sr-only">Delete</span>
-          </button>
+          {onSaveToProfile && (
+            <button
+              onClick={saveToProfile}
+              disabled={saving || saved}
+              className={`link disabled:cursor-default ${saved ? "text-primary hover:text-primary" : ""}`}
+              title={saved ? "In your saved items" : "Save to my profile"}
+              aria-pressed={saved}
+            >
+              {saving ? (
+                <LoaderCircle className="size-4 animate-spin" aria-hidden />
+              ) : saved ? (
+                <BookmarkCheck className="size-4 animate-pop" aria-hidden />
+              ) : (
+                <Bookmark className="icon-nudge" aria-hidden />
+              )}
+              <span className="sr-only">{saved ? "In your saved items" : "Save to my profile"}</span>
+            </button>
+          )}
+          {canEdit && (
+            <>
+              <button onClick={() => setEditing(true)} className="link" title="Edit">
+                <Pencil className="icon-nudge" aria-hidden />
+                <span className="sr-only">Edit</span>
+              </button>
+              <button onClick={onDelete} className="link-danger group" title="Delete">
+                <Trash2 className="size-4 group-hover:animate-wiggle" aria-hidden />
+                <span className="sr-only">Delete</span>
+              </button>
+            </>
+          )}
         </div>
       )}
     </li>

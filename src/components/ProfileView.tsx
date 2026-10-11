@@ -11,12 +11,13 @@ import ItemForm, { type ItemFormValues } from "@/components/ItemForm";
 import Loading from "@/components/Loading";
 import { useSavedItems } from "@/hooks/useSavedItems";
 import { apiFetch } from "@/lib/apiClient";
-import { formatRupees } from "@/lib/format";
+import { formatPriceLine } from "@/lib/format";
+import { lineTotal } from "@/lib/totals";
 import type { FolderListResponse, SavedItemDTO, SessionUser } from "@/types";
 
 /** Saved items have no group, so send only their own fields. */
-function toSavedBody({ name, category, price, description }: ItemFormValues) {
-  return JSON.stringify({ name, category, price, description });
+function toSavedBody({ name, category, price, priceUnit, quantity, description }: ItemFormValues) {
+  return JSON.stringify({ name, category, price, priceUnit, quantity, description });
 }
 
 export default function ProfileView() {
@@ -169,7 +170,9 @@ function SavedItemRow({
               {item.category}
             </span>
           )}
-          {item.price !== null && <span className="text-sm font-medium text-primary">{formatRupees(item.price)}</span>}
+          {formatPriceLine(item, lineTotal(item)) && (
+            <span className="text-sm font-medium text-primary">{formatPriceLine(item, lineTotal(item))}</span>
+          )}
         </div>
         {item.description && <p className="mt-1 text-sm wrap-break-word text-muted">{item.description}</p>}
       </div>

@@ -34,8 +34,8 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
 
     // Record who ticked it and when; clear both when unticked.
     const update = result.value.done
-      ? { $set: { done: true, doneBy: user.id, doneAt: new Date() } }
-      : { $set: { done: false }, $unset: { doneBy: "", doneAt: "" } };
+      ? { $set: { done: true, doneBy: user.id, doneAt: new Date() }, $unset: { doneByGuest: "" } }
+      : { $set: { done: false }, $unset: { doneBy: "", doneByGuest: "", doneAt: "" } };
 
     // Filtering by folder too means an item from another folder is simply "not found".
     const item = await Item.findOneAndUpdate({ _id: itemId, folder: access.folder._id }, update, {

@@ -1,5 +1,6 @@
 import type { Types } from "mongoose";
 import { Item } from "@/models/Item";
+import { CASE_INSENSITIVE } from "@/lib/duplicates";
 import type { ItemFieldsInput } from "@/lib/validators";
 
 // Item helpers shared by the item routes and the folder list.
@@ -17,6 +18,28 @@ export function toItemUpdate(fields: ItemFieldsInput) {
     else if (value !== undefined) $set[key] = value;
   }
   return { ...(Object.keys($set).length && { $set }), ...(Object.keys($unset).length && { $unset }) };
+}
+
+/**
+ * The folder's own spelling of `group` if it already has that group in any
+ * case ("vegetables" → "Vegetables"), so one group never splits into two.
+ * Items in `exceptGroup` (a group being renamed) or `exceptItemId` (the item
+ * being edited) don't count, so a case-only change of your own is kept.
+ */
+export async function existingGroupName(
+  folderId: Types.ObjectId,
+  group: string,
+  { exceptGroup, exceptItemId }: { exceptGroup?: string; exceptItemId?: string } = {}
+): Promise<string> {
+  const found = await Item.findOne({
+    folder: folderId,
+    group: exceptGroup === undefined ? group : { $eq: group, $ne: exceptGroup },
+    ...(exceptItemId && { _id: { $ne: exceptItemId } }),
+  })
+    .collation(CASE_INSENSITIVE)
+    .select("group")
+    .lean();
+  return found?.group ?? group;
 }
 
 /** { total, done } item counts for one folder. */

@@ -5,6 +5,7 @@
 
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Check, ChevronRight, Layers, Pencil, X } from "lucide-react";
+import Combobox from "@/components/Combobox";
 import { LIMITS } from "@/lib/limits";
 
 interface GroupSectionProps {
@@ -13,12 +14,14 @@ interface GroupSectionProps {
   done: number;
   total: number;
   canEdit: boolean;
+  /** All group names in the folder, offered when renaming (picking one merges into it). */
+  groups?: string[];
   /** Return true when renamed. */
   onRename: (to: string | null) => Promise<boolean>;
   children: ReactNode;
 }
 
-export default function GroupSection({ name, done, total, canEdit, onRename, children }: GroupSectionProps) {
+export default function GroupSection({ name, done, total, canEdit, groups = [], onRename, children }: GroupSectionProps) {
   const [open, setOpen] = useState(true);
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(name ?? "");
@@ -56,13 +59,16 @@ export default function GroupSection({ name, done, total, canEdit, onRename, chi
         )}
         {renaming && (
           <form onSubmit={rename} className="ml-auto flex gap-2">
-            <input
+            <Combobox
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={setDraft}
+              options={groups
+                .filter((g) => g !== name && g.toLowerCase().includes(draft.trim().toLowerCase()))
+                .map((g) => ({ key: g, value: g, label: `Move into "${g}"` }))}
               maxLength={LIMITS.ITEM_GROUP_MAX}
               autoFocus
               aria-label="New group name"
-              className="input py-1 text-sm"
+              className="input w-full py-1 text-sm"
             />
             <button className="btn-secondary text-sm" title="Save">
               <Check className="icon-nudge" aria-hidden />

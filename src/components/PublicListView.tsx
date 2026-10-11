@@ -1,11 +1,14 @@
 "use client";
 
 // Read-only view of a shared list for visitors who are not logged in
-// (/share/<token>). Shows the items, groups and totals; ticking or editing
-// needs an account, so it offers Log in / Sign up that come back here.
+// (/share/<token>). Shows the items, groups and totals. If the owner allowed
+// ticking on the link, guests can tick too (the owner sees it live, "by
+// Guest"); editing needs an account, so it offers Log in / Sign up.
+// Guests can't join the private Pusher channel, so the list re-checks the
+// server every few seconds while the tab is visible.
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { CircleDashed, Eye, IndianRupee, LogIn, ShoppingBasket, Unlink, UserPlus } from "lucide-react";
 import ErrorText from "@/components/ErrorText";
 import GroupSection from "@/components/GroupSection";
@@ -13,27 +16,89 @@ import ItemRow from "@/components/ItemRow";
 import Loading from "@/components/Loading";
 import ProgressBar from "@/components/ProgressBar";
 import StatusBadge from "@/components/StatusBadge";
-import { apiFetch } from "@/lib/apiClient";
+import { ApiError, apiFetch } from "@/lib/apiClient";
 import { formatRupees } from "@/lib/format";
 import { computeTotals, groupItems } from "@/lib/totals";
-import type { PublicShareResponse } from "@/types";
+import type { ItemDTO, PublicShareResponse } from "@/types";
 
 const noop = () => {};
 const cannotRename = async () => false;
+const REFRESH_MS = 15_000;
 
 export default function PublicListView({ token }: { token: string }) {
   const [data, setData] = useState<PublicShareResponse | null>(null);
   const [error, setError] = useState("");
+  const [toggleError, setToggleError] = useState("");
+  // Items with a tick request in flight: a refresh mustn't undo them mid-way.
+  const [pending, setPending] = useState<string[]>([]);
+  const base = `/api/share/${encodeURIComponent(token)}`;
+
+  const load = useCallback(
+    () =>
+      apiFetch<PublicShareResponse>(base).then((fresh) =>
+        setData((prev) => {
+          if (!prev) return fresh;
+          // Keep my own in-flight ticks; take everything else from the server.
+          const mine = new Map(prev.items.map((i) => [i.id, i]));
+          return { ...fresh, items: fresh.items.map((i) => (pending.includes(i.id) ? (mine.get(i.id) ?? i) : i)) };
+        })
+      ),
+    [base, pending]
+  );
 
   useEffect(() => {
     let cancelled = false;
-    apiFetch<PublicShareResponse>(`/api/share/${encodeURIComponent(token)}`)
+    apiFetch<PublicShareResponse>(base)
       .then((d) => !cancelled && setData(d))
       .catch((err: unknown) => !cancelled && setError(err instanceof Error ? err.message : "Something went wrong"));
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [base]);
+
+  // Pick up changes the owner (or others) made, while this tab is on screen.
+  useEffect(() => {
+    if (!data) return;
+    const refresh = () => {
+      if (document.visibilityState !== "visible") return;
+      load().catch((err: unknown) => {
+        // Link turned off / reset meanwhile: show why instead of stale items.
+        if (err instanceof ApiError && err.status === 404) setError(err.message);
+      });
+    };
+    const timer = setInterval(refresh, REFRESH_MS);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [data, load]);
+
+  // Optimistic tick; undone if the server says no.
+  async function toggle(item: ItemDTO) {
+    if (pending.includes(item.id)) return;
+    const done = !item.done;
+    const put = (next: ItemDTO) =>
+      setData((d) => (d ? { ...d, items: d.items.map((i) => (i.id === next.id ? next : i)) } : d));
+    setToggleError("");
+    setPending((p) => [...p, item.id]);
+    put({ ...item, done });
+    try {
+      put(
+        await apiFetch<ItemDTO>(`${base}/items/${encodeURIComponent(item.id)}/toggle`, {
+          method: "POST",
+          body: JSON.stringify({ done }),
+        })
+      );
+    } catch (err) {
+      put(item);
+      setToggleError(err instanceof Error ? err.message : "Something went wrong");
+      if (err instanceof ApiError && err.status === 403) setData((d) => (d ? { ...d, canCheck: false } : d));
+      if (err instanceof ApiError && err.status === 404) void load().catch(() => {});
+    } finally {
+      setPending((p) => p.filter((id) => id !== item.id));
+    }
+  }
 
   if (error) {
     return (
@@ -49,7 +114,7 @@ export default function PublicListView({ token }: { token: string }) {
   if (!data) return <Loading label="Opening shared list…" />;
 
   const next = encodeURIComponent(`/share/${token}`);
-  const { list, items } = data;
+  const { list, items, canCheck } = data;
   const totals = computeTotals(items);
 
   return (
@@ -57,7 +122,15 @@ export default function PublicListView({ token }: { token: string }) {
       <div className="card mb-6 flex animate-fade-up flex-wrap items-center gap-3 border-accent/40">
         <Eye className="size-5 shrink-0 text-accent" aria-hidden />
         <p className="min-w-0 flex-1 text-sm text-muted">
-          You&apos;re viewing this list <span className="text-fg">read-only</span>. Log in to tick or edit items.
+          {canCheck ? (
+            <>
+              You can <span className="text-fg">tick items</span> without logging in. Log in to edit items or save them.
+            </>
+          ) : (
+            <>
+              You&apos;re viewing this list <span className="text-fg">read-only</span>. Log in to tick or edit items.
+            </>
+          )}
         </p>
         <div className="flex gap-2">
           <Link href={`/login?next=${next}`} className="btn-primary text-sm">
@@ -78,6 +151,7 @@ export default function PublicListView({ token }: { token: string }) {
       <div className="mt-2 mb-6">
         <ProgressBar done={items.filter((i) => i.done).length} total={items.length} />
       </div>
+      <ErrorText message={toggleError} className="mb-4" />
 
       {items.length === 0 ? (
         <div className="card flex animate-fade-up flex-col items-center gap-3 py-10 text-center text-muted">
@@ -100,9 +174,9 @@ export default function PublicListView({ token }: { token: string }) {
                   key={item.id}
                   item={item}
                   groups={[]}
-                  canCheck={false}
+                  canCheck={canCheck && !pending.includes(item.id)}
                   canEdit={false}
-                  onToggle={noop}
+                  onToggle={() => void toggle(item)}
                   onSave={cannotRename}
                   onDelete={noop}
                 />

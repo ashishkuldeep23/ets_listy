@@ -2,7 +2,7 @@ import mongoose, { type Types } from "mongoose";
 import { connectDB } from "@/lib/db";
 import { LIMITS } from "@/lib/limits";
 import { SavedItem, savedItemKeys, type ISavedItem } from "@/models/SavedItem";
-import type { CreateSavedItemInput, SavedItemFieldsInput } from "@/lib/validators";
+import { withPriceUnitRule, type CreateSavedItemInput, type SavedItemFieldsInput } from "@/lib/validators";
 
 // Saving items to a user's profile without creating duplicates.
 
@@ -29,6 +29,7 @@ export async function upsertSavedItem(ownerId: string, fields: CreateSavedItemIn
   const owner = new mongoose.Types.ObjectId(ownerId);
   const keys = savedItemKeys(fields.name, fields.category);
   const filter = { owner, ...keys };
+  fields = withPriceUnitRule(fields);
 
   const exists = await SavedItem.exists(filter);
   if (!exists && (await SavedItem.countDocuments({ owner })) >= LIMITS.SAVED_ITEMS_PER_USER) return null;
@@ -59,6 +60,7 @@ export async function updateSavedItem(
   const name = fields.name ?? current.name;
   const category = fields.category === undefined ? current.category : fields.category;
   const keys = savedItemKeys(name, category);
+  fields = withPriceUnitRule(fields);
   if (await SavedItem.exists({ owner: ownerId, ...keys, _id: { $ne: current._id } })) return "duplicate";
 
   const { $set, $unset } = toUpdate(fields);

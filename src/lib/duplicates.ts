@@ -7,7 +7,7 @@ import { Item } from "@/models/Item";
 // so "Milk" and "milk" count as the same.
 
 // Collation compares without case (strength 2), so no regex or extra key field is needed.
-const CASE_INSENSITIVE = { locale: "en", strength: 2 } as const;
+export const CASE_INSENSITIVE = { locale: "en", strength: 2 } as const;
 
 type Id = string | Types.ObjectId;
 

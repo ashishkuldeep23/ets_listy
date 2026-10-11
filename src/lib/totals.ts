@@ -2,11 +2,13 @@
 
 export interface PricedItem {
   price: number | null;
+  /** null / missing = 1. */
+  quantity?: number | null;
   done: boolean;
 }
 
 export interface Totals {
-  /** Sum of every item that has a price. */
+  /** Sum of price × quantity of every item that has a price. */
   total: number;
   /** Sum of items still to get (not ticked) that have a price. */
   remaining: number;
@@ -15,7 +17,13 @@ export interface Totals {
 }
 
 // Sums in paise (whole numbers) so 0.1 + 0.2 doesn't turn into 0.30000000000000004.
-const toPaise = (rupees: number) => Math.round(rupees * 100);
+// One item's line is price × quantity (quantity defaults to 1), rounded to the paisa.
+const linePaise = (price: number, quantity: number | null | undefined) => Math.round(price * 100 * (quantity ?? 1));
+
+/** One item's total in rupees (price × quantity), or null when it has no price. */
+export function lineTotal(item: Pick<PricedItem, "price" | "quantity">): number | null {
+  return item.price === null ? null : linePaise(item.price, item.quantity) / 100;
+}
 
 export function computeTotals(items: readonly PricedItem[]): Totals {
   let total = 0;
@@ -26,8 +34,9 @@ export function computeTotals(items: readonly PricedItem[]): Totals {
       unpriced += 1;
       continue;
     }
-    total += toPaise(item.price);
-    if (!item.done) remaining += toPaise(item.price);
+    const line = linePaise(item.price, item.quantity);
+    total += line;
+    if (!item.done) remaining += line;
   }
   return { total: total / 100, remaining: remaining / 100, unpriced };
 }

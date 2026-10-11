@@ -84,6 +84,16 @@ export interface ShareLinkResponse {
   link: ShareLinkDTO | null;
 }
 
+/** A user found by GET /api/users/search, to invite to a list. */
+export interface UserSearchResult extends UserRef {
+  email: string;
+}
+
+/** GET /api/users/search?q= */
+export interface UserSearchResponse {
+  users: UserSearchResult[];
+}
+
 /** POST /api/share/:token/accept */
 export interface AcceptShareResponse {
   folderId: string;
@@ -97,6 +107,8 @@ export interface AcceptShareResponse {
 export interface PublicShareResponse {
   list: Pick<FolderDTO, "name" | "status">;
   items: ItemDTO[];
+  /** The owner allowed ticking on this link: anyone with it may tick, even logged out. */
+  canCheck: boolean;
 }
 
 /** An item inside a folder. Optional fields are null when not set. */
@@ -107,6 +119,10 @@ export interface ItemDTO {
   category: string | null;
   /** Rupees. */
   price: number | null;
+  /** What the price is for, e.g. "kg" → "₹40 / kg". null = the price is for the item as a whole. */
+  priceUnit: string | null;
+  /** How many (may be a decimal, e.g. 2.5 kg). null = 1. Item total = price × quantity. */
+  quantity: number | null;
   description: string | null;
   /** Group name inside the folder (e.g. "Vegetables"); null = ungrouped. */
   group: string | null;
@@ -133,6 +149,8 @@ export interface SavedItemDTO {
   name: string;
   category: string | null;
   price: number | null;
+  priceUnit: string | null;
+  quantity: number | null;
   description: string | null;
   createdAt: string | Date;
   updatedAt: string | Date;

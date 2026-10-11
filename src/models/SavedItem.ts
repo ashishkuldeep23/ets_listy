@@ -10,6 +10,9 @@ export interface ISavedItem {
   name: string;
   category?: string;
   price?: number;
+  priceUnit?: string;
+  /** How many; unset = 1. */
+  quantity?: number;
   description?: string;
   /**
    * Lower-cased name and category. Together with owner they identify a saved
@@ -27,6 +30,8 @@ const savedItemSchema = new mongoose.Schema<ISavedItem>(
     name: { type: String, required: true, trim: true, maxlength: LIMITS.ITEM_NAME_MAX },
     category: { type: String, trim: true, maxlength: LIMITS.ITEM_CATEGORY_MAX },
     price: { type: Number, min: 0, max: LIMITS.ITEM_PRICE_MAX },
+    priceUnit: { type: String, trim: true, maxlength: LIMITS.ITEM_PRICE_UNIT_MAX },
+    quantity: { type: Number, min: 0, max: LIMITS.ITEM_QUANTITY_MAX },
     description: { type: String, trim: true, maxlength: LIMITS.ITEM_DESCRIPTION_MAX },
     nameKey: { type: String, required: true },
     categoryKey: { type: String, default: "" },
@@ -54,6 +59,8 @@ export function serializeSavedItem(item: ISavedItem & { _id: Types.ObjectId }): 
     name: item.name,
     category: item.category ?? null,
     price: item.price ?? null,
+    priceUnit: item.price != null ? (item.priceUnit ?? null) : null,
+    quantity: item.quantity ?? null,
     description: item.description ?? null,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
