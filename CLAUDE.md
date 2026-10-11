@@ -87,11 +87,15 @@ src/
     AcceptShare.tsx          # /share/[token] body (join, or read-only view for guests)
     PublicListView.tsx       # guest read-only list + Log in / Sign up prompt
     LiveDot.tsx              # header "Live" indicator (hidden if Pusher is off)
+    SaveOfflineButton.tsx    # "Save offline" on a list (folder + share page); keeps the copy fresh, syncs offline ticks
+    OfflineListView.tsx      # list page with no internet: saved copy, local ticks, auto-retry
+    ServiceWorker.tsx        # registers public/sw.js (production only)
     ProfileView.tsx          # profile page body
   hooks/
     useSavedItems.ts         # debounced saved-items search, shared by picker + profile
     useChannel.ts            # subscribe to a Pusher channel while mounted (+ refetch after reconnect)
     useMe.ts                 # current user (fetched per mount, no cache)
+    useOnline.ts             # navigator.onLine as a hook (a hint only; a failed fetch also means offline)
   lib/
     db.ts          # cached Mongoose connection: always use connectDB()
     session.ts     # sign/verify session JWT (jose); no DB, used by proxy.ts
@@ -111,6 +115,8 @@ src/
     savedItems.ts  # upsertSavedItem() (no duplicates, limit), updateSavedItem(), escapeRegex()
     duplicates.ts  # folderNameTaken() / itemNameTaken(): case-insensitive, routes answer 409
     rateLimit.ts   # in-memory rate limiter (per process only)
+    offlineLists.ts # "Save offline" copies in localStorage (by page path) + offline ticks; cleared on logout
+    offlineSync.ts # browser only: page cache for public/sw.js, sends offline ticks when back online
     safeRedirect.ts # safeNextPath() for ?next= redirects
     limits.ts      # size limits shared by validators and schemas
     validators.ts  # request body validation

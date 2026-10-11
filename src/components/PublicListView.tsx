@@ -15,6 +15,7 @@ import GroupSection from "@/components/GroupSection";
 import ItemRow from "@/components/ItemRow";
 import Loading from "@/components/Loading";
 import ProgressBar from "@/components/ProgressBar";
+import SaveOfflineButton from "@/components/SaveOfflineButton";
 import StatusBadge from "@/components/StatusBadge";
 import { ApiError, apiFetch } from "@/lib/apiClient";
 import { formatRupees } from "@/lib/format";
@@ -74,6 +75,9 @@ export default function PublicListView({ token }: { token: string }) {
     };
   }, [data, load]);
 
+  // After offline ticks were sent: show the server's state right away.
+  const refreshNow = useCallback(() => void load().catch(() => {}), [load]);
+
   // Optimistic tick; undone if the server says no.
   async function toggle(item: ItemDTO) {
     if (pending.includes(item.id)) return;
@@ -119,25 +123,28 @@ export default function PublicListView({ token }: { token: string }) {
 
   return (
     <div>
-      <div className="card mb-6 flex animate-fade-up flex-wrap items-center gap-3 border-accent/40">
-        <Eye className="size-5 shrink-0 text-accent" aria-hidden />
-        <p className="min-w-0 flex-1 text-sm text-muted">
-          {canCheck ? (
-            <>
-              You can <span className="text-fg">tick items</span> without logging in. Log in to edit items or save them.
-            </>
-          ) : (
-            <>
-              You&apos;re viewing this list <span className="text-fg">read-only</span>. Log in to tick or edit items.
-            </>
-          )}
-        </p>
-        <div className="flex gap-2">
-          <Link href={`/login?next=${next}`} className="btn-primary text-sm">
+      {/* Phones: message on top, buttons full width below. sm+: one row. */}
+      <div className="card mb-6 flex animate-fade-up flex-col gap-3 border-accent/40 sm:flex-row sm:items-center">
+        <div className="flex min-w-0 flex-1 items-start gap-3">
+          <Eye className="mt-0.5 size-5 shrink-0 text-accent" aria-hidden />
+          <p className="text-sm text-muted">
+            {canCheck ? (
+              <>
+                You can <span className="text-fg">tick items</span> without logging in. Log in to edit items or save them.
+              </>
+            ) : (
+              <>
+                You&apos;re viewing this list <span className="text-fg">read-only</span>. Log in to tick or edit items.
+              </>
+            )}
+          </p>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <Link href={`/login?next=${next}`} className="btn-primary flex-1 text-sm sm:flex-none">
             <LogIn className="icon-nudge" aria-hidden />
             Log in
           </Link>
-          <Link href={`/signup?next=${next}`} className="btn-ghost text-sm">
+          <Link href={`/signup?next=${next}`} className="btn-ghost flex-1 text-sm sm:flex-none">
             <UserPlus className="icon-nudge" aria-hidden />
             Sign up
           </Link>
@@ -147,6 +154,16 @@ export default function PublicListView({ token }: { token: string }) {
       <div className="mb-1 flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold wrap-break-word text-primary">{list.name}</h1>
         <StatusBadge status={list.status} />
+        <div className="ml-auto">
+          <SaveOfflineButton
+            path={`/share/${token}`}
+            name={list.name}
+            status={list.status}
+            items={items}
+            toggleBase={canCheck ? `${base}/items` : null}
+            onSynced={refreshNow}
+          />
+        </div>
       </div>
       <div className="mt-2 mb-6">
         <ProgressBar done={items.filter((i) => i.done).length} total={items.length} />

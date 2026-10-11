@@ -9,6 +9,8 @@
 // do (tick / edit / manage) comes from the API, not guessed here.
 // Live: listens on the folder's Pusher channel, so changes made by anyone
 // else show up without a refresh. The server is still the source of truth.
+// Offline: if the list was saved with "Save offline", shows that copy
+// (OfflineListView); SaveOfflineButton sends its ticks once back online.
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -31,19 +33,24 @@ import GroupSection from "@/components/GroupSection";
 import Loading from "@/components/Loading";
 import ItemForm, { type ItemFormValues } from "@/components/ItemForm";
 import ItemRow from "@/components/ItemRow";
+import OfflineListView from "@/components/OfflineListView";
 import ProgressBar from "@/components/ProgressBar";
+import SaveOfflineButton from "@/components/SaveOfflineButton";
 import SavedItemPicker from "@/components/SavedItemPicker";
 import SharePanel from "@/components/SharePanel";
 import StatusBadge from "@/components/StatusBadge";
 import { useChannel } from "@/hooks/useChannel";
+import { useOnline } from "@/hooks/useOnline";
 import { useSavedItems } from "@/hooks/useSavedItems";
 import { ApiError, apiFetch } from "@/lib/apiClient";
 import { EVENTS, folderChannel } from "@/lib/channels";
 import { formatRupees } from "@/lib/format";
+import { getOfflineList } from "@/lib/offlineLists";
 import { computeTotals, groupItems } from "@/lib/totals";
 import type { FolderDTO, FolderDetailDTO, ItemDTO, ItemListResponse, SavedItemDTO, SessionUser } from "@/types";
 
-type LoadState = "loading" | "ready" | "notFound" | "error";
+// "offline": the load failed for lack of network and there is a saved copy to show.
+type LoadState = "loading" | "ready" | "notFound" | "error" | "offline";
 
 /** Same identity as the server uses for saved items: name + category, any case. */
 const savedKey = (name: string, category: string | null) =>
@@ -56,6 +63,11 @@ const isNewer = (incoming: ItemDTO, current: ItemDTO) =>
 export default function FolderView() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const online = useOnline();
+  const path = `/folders/${id}`;
+  // Bumped to load again while the offline copy is showing.
+  const [attempt, setAttempt] = useState(0);
+  const retry = useCallback(() => setAttempt((a) => a + 1), []);
   const [folder, setFolder] = useState<FolderDetailDTO | null>(null);
   const [items, setItems] = useState<ItemDTO[]>([]);
   const [state, setState] = useState<LoadState>("loading");
@@ -75,7 +87,9 @@ export default function FolderView() {
     return Promise.all([apiFetch<FolderDetailDTO>(base), apiFetch<ItemListResponse>(`${base}/items`)]);
   }, [id]);
 
+  // Runs again when the connection comes back (or on a retry from the offline view).
   useEffect(() => {
+    if (!online) return;
     let cancelled = false;
     loadAll()
       .then(([f, list]) => {
@@ -85,12 +99,14 @@ export default function FolderView() {
         setState("ready");
       })
       .catch((err: unknown) => {
-        if (!cancelled) setState(err instanceof ApiError && err.status === 404 ? "notFound" : "error");
+        if (cancelled) return;
+        if (err instanceof ApiError) setState(err.status === 404 ? "notFound" : "error");
+        else setState(getOfflineList(path) ? "offline" : "error");
       });
     return () => {
       cancelled = true;
     };
-  }, [loadAll]);
+  }, [loadAll, online, path, attempt]);
 
   // Shows a message, then goes home (used when the folder is gone for me).
   const leaveWithNotice = useCallback(
@@ -161,7 +177,9 @@ export default function FolderView() {
     );
   }
 
-  if (state === "loading") return <Loading />;
+  if (state === "offline" || (!online && getOfflineList(path))) return <OfflineListView path={path} onRetry={retry} />;
+  // Offline with no saved copy: nothing will load, say so instead of spinning.
+  if (state === "loading" && online) return <Loading />;
 
   if (state !== "ready" || !folder) {
     return (
@@ -298,12 +316,22 @@ export default function FolderView() {
       <div className="mt-2 mb-1 flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold wrap-break-word text-primary">{folder.name}</h1>
         <StatusBadge status={folder.status} />
-        {folder.canManage && !showShare && (
-          <button onClick={() => setShowShare(true)} className="btn-secondary ml-auto text-sm" title="Share">
-            <Share2 className="icon-nudge" aria-hidden />
-            <span className="sr-only">Share</span>
-          </button>
-        )}
+        <div className="ml-auto flex gap-2">
+          <SaveOfflineButton
+            path={path}
+            name={folder.name}
+            status={folder.status}
+            items={items}
+            toggleBase={folder.canCheck ? itemsUrl : null}
+            onSynced={refetch}
+          />
+          {folder.canManage && !showShare && (
+            <button onClick={() => setShowShare(true)} className="btn-secondary text-sm" title="Share">
+              <Share2 className="icon-nudge" aria-hidden />
+              <span className="sr-only">Share</span>
+            </button>
+          )}
+        </div>
       </div>
       {folder.role === "shared" && (
         <div className="mb-2 flex flex-wrap items-center gap-3 text-sm text-muted">
