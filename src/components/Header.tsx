@@ -1,6 +1,7 @@
 "use client";
 
-// Top bar with the app name, the logged-in user's name and Logout.
+// Top bar with the app name, my avatar + first name (→ profile) and Logout.
+// Also hosts the chat toasts for logged-in users.
 // Pages are already protected by src/proxy.js; if /api/auth/me still says
 // 401 (e.g. the account was deleted), send the user to login, except on
 // pages open to guests (`allowGuest`), which show a Log in button instead.
@@ -8,8 +9,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ListChecks, LogIn, LogOut, UserRound } from "lucide-react";
+import { ListChecks, LogIn, LogOut } from "lucide-react";
+import Avatar, { firstNameOf } from "@/components/Avatar";
+import ChatToasts from "@/components/ChatToasts";
 import LiveDot from "@/components/LiveDot";
+import { ME_UPDATED_EVENT } from "@/lib/constants";
 import { clearOfflineLists } from "@/lib/offlineLists";
 import { clearOfflineCache } from "@/lib/offlineSync";
 import type { SessionUser } from "@/types";
@@ -35,6 +39,13 @@ export default function Header({ allowGuest = false }: { allowGuest?: boolean })
       .catch(() => {});
   }, [router, allowGuest]);
 
+  // The profile page changed my name: show it without a reload.
+  useEffect(() => {
+    const onUpdate = (e: Event) => e instanceof CustomEvent && setUser(e.detail as SessionUser);
+    window.addEventListener(ME_UPDATED_EVENT, onUpdate);
+    return () => window.removeEventListener(ME_UPDATED_EVENT, onUpdate);
+  }, []);
+
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
     // Lists saved for offline use stay on the device otherwise; the next person here shouldn't see them.
@@ -58,10 +69,13 @@ export default function Header({ allowGuest = false }: { allowGuest?: boolean })
         {/* Guests can't join live channels (their list polls instead), so no "Live" dot for them. */}
         {knownUser && <LiveDot />}
         {user && (
-          <Link href="/profile" className="flex items-center gap-1.5 text-muted hover:text-fg" title="Profile and saved items">
-            <UserRound className="icon-nudge text-accent" aria-hidden />
-            <span className="hidden sm:inline">Hi, </span>
-            <span className="text-accent">{user.name}</span>
+          <Link
+            href="/profile"
+            className="flex min-w-0 items-center gap-2 rounded-full py-0.5 pr-2 pl-0.5 text-fg hover:bg-surface-2"
+            title="Profile and saved items"
+          >
+            <Avatar name={user.name} />
+            <span className="max-w-[7rem] truncate font-medium sm:max-w-[10rem]">{firstNameOf(user.name)}</span>
           </Link>
         )}
         {guestNext !== null ? (
@@ -79,6 +93,7 @@ export default function Header({ allowGuest = false }: { allowGuest?: boolean })
           )
         )}
       </div>
+      {user && <ChatToasts userId={user.id} />}
     </header>
   );
 }

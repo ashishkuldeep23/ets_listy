@@ -13,10 +13,13 @@ import { CircleDashed, Eye, IndianRupee, LogIn, ShoppingBasket, Unlink, UserPlus
 import ErrorText from "@/components/ErrorText";
 import GroupSection from "@/components/GroupSection";
 import ItemRow from "@/components/ItemRow";
+import ListChat from "@/components/ListChat";
+import ViewersButton from "@/components/ViewersButton";
 import Loading from "@/components/Loading";
 import ProgressBar from "@/components/ProgressBar";
 import SaveOfflineButton from "@/components/SaveOfflineButton";
 import StatusBadge from "@/components/StatusBadge";
+import { usePresence } from "@/hooks/usePresence";
 import { ApiError, apiFetch } from "@/lib/apiClient";
 import { formatRupees } from "@/lib/format";
 import { computeTotals, groupItems } from "@/lib/totals";
@@ -33,6 +36,7 @@ export default function PublicListView({ token }: { token: string }) {
   // Items with a tick request in flight: a refresh mustn't undo them mid-way.
   const [pending, setPending] = useState<string[]>([]);
   const base = `/api/share/${encodeURIComponent(token)}`;
+  const presence = usePresence(base, true, data !== null && !error);
 
   const load = useCallback(
     () =>
@@ -122,7 +126,8 @@ export default function PublicListView({ token }: { token: string }) {
   const totals = computeTotals(items);
 
   return (
-    <div>
+    // Bottom padding keeps the last card clear of the chat button.
+    <div className="pb-20">
       {/* Phones: message on top, buttons full width below. sm+: one row. */}
       <div className="card mb-6 flex animate-fade-up flex-col gap-3 border-accent/40 sm:flex-row sm:items-center">
         <div className="flex min-w-0 flex-1 items-start gap-3">
@@ -154,7 +159,8 @@ export default function PublicListView({ token }: { token: string }) {
       <div className="mb-1 flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold wrap-break-word text-primary">{list.name}</h1>
         <StatusBadge status={list.status} />
-        <div className="ml-auto">
+        <div className="ml-auto flex gap-2">
+          <ViewersButton people={presence.people} />
           <SaveOfflineButton
             path={`/share/${token}`}
             name={list.name}
@@ -219,6 +225,9 @@ export default function PublicListView({ token }: { token: string }) {
           </div>
         </div>
       )}
+
+      {/* Guests chat too (as "Guest XXXX"), only online and with 2+ people here. */}
+      <ListChat base={base} folderId={null} presence={presence} />
     </div>
   );
 }

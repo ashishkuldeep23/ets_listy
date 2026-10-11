@@ -6,6 +6,7 @@
 // ticks made offline are sent to the server (then `onSynced` reloads the
 // list). Click again to remove the copy.
 
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { CloudCheck, Download, LoaderCircle } from "lucide-react";
 import { getOfflineList, removeOfflineList, saveOfflineList, type OfflineSnapshot } from "@/lib/offlineLists";
@@ -21,6 +22,7 @@ interface SaveOfflineButtonProps extends OfflineSnapshot {
 export default function SaveOfflineButton({ path, name, status, items, toggleBase, onSynced }: SaveOfflineButtonProps) {
   // Only rendered after the list loaded in the browser, so reading storage here is safe.
   const [saved, setSaved] = useState(() => getOfflineList(path) !== null);
+  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const syncing = useRef(false);
 
@@ -59,6 +61,8 @@ export default function SaveOfflineButton({ path, name, status, items, toggleBas
       saveOfflineList({ path, name, status, items, toggleBase });
       // Without the page cache the list still shows offline in an open tab, just not after a reload.
       await cachePageForOffline(path).catch((err: unknown) => console.error("Offline page cache failed", err));
+      // Re-request the page's data now that it is saved, so the service worker keeps a full copy of it.
+      router.refresh();
       setSaved(true);
     }
     setBusy(false);

@@ -1,19 +1,25 @@
 "use client";
 
-// Profile page body: my name/email and my saved items library
-// (search, add, edit, delete). Saved items are private to me.
+// Profile page body: my avatar, name and email (name editable in a
+// dialog, email read-only), the lists shared with me, and my saved items
+// library (search, add, edit, delete). Saved items are private to me.
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { ArrowRight, Bookmark, BookmarkX, Mail, Pencil, Search, Tag, Trash2, UserRound, Users } from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { Bookmark, BookmarkX, ChevronRight, Lock, Mail, Pencil, Search, Tag, Trash2, Users, X } from "lucide-react";
+import Avatar from "@/components/Avatar";
 import ErrorText from "@/components/ErrorText";
 import ItemForm, { type ItemFormValues } from "@/components/ItemForm";
 import Loading from "@/components/Loading";
+import ProgressBar from "@/components/ProgressBar";
+import StatusBadge from "@/components/StatusBadge";
 import { useSavedItems } from "@/hooks/useSavedItems";
 import { apiFetch } from "@/lib/apiClient";
+import { ME_UPDATED_EVENT } from "@/lib/constants";
 import { formatPriceLine } from "@/lib/format";
+import { LIMITS } from "@/lib/limits";
 import { lineTotal } from "@/lib/totals";
-import type { FolderListResponse, SavedItemDTO, SessionUser } from "@/types";
+import type { FolderListResponse, FolderSummaryDTO, SavedItemDTO, SessionUser } from "@/types";
 
 /** Saved items have no group, so send only their own fields. */
 function toSavedBody({ name, category, price, priceUnit, quantity, description }: ItemFormValues) {
@@ -22,7 +28,10 @@ function toSavedBody({ name, category, price, priceUnit, quantity, description }
 
 export default function ProfileView() {
   const [user, setUser] = useState<SessionUser | null>(null);
-  const [sharedCount, setSharedCount] = useState<number | null>(null);
+  const [editing, setEditing] = useState(false);
+  // null = loading; an error shows in the section instead.
+  const [shared, setShared] = useState<FolderSummaryDTO[] | null>(null);
+  const [sharedError, setSharedError] = useState("");
   const [query, setQuery] = useState("");
   const [actionError, setActionError] = useState("");
   const { savedItems, loading, error, reload } = useSavedItems(query);
@@ -32,8 +41,11 @@ export default function ProfileView() {
       .then(setUser)
       .catch(() => {});
     apiFetch<FolderListResponse>("/api/folders?scope=shared")
-      .then((data) => setSharedCount(data.counts.all))
-      .catch(() => {});
+      .then((data) => setShared(data.folders))
+      .catch((err: unknown) => {
+        setShared([]);
+        setSharedError(err instanceof Error ? err.message : "Could not load shared lists");
+      });
   }, []);
 
   // Runs a change, reloads the list, and shows any error; true on success.
@@ -60,26 +72,85 @@ export default function ProfileView() {
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="card flex animate-fade-up items-start gap-4">
-        <span className="flex size-12 shrink-0 items-center justify-center rounded-full border border-primary/40 bg-primary/10 text-primary">
-          <UserRound className="size-6" aria-hidden />
-        </span>
-        <div className="min-w-0">
+      <section className="card flex animate-fade-up flex-col items-center gap-3 text-center sm:flex-row sm:items-center sm:text-left">
+        <Avatar name={user?.name ?? "?"} size="lg" />
+        <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-semibold wrap-break-word text-primary">{user?.name ?? "Your profile"}</h1>
           {user && (
-            <p className="flex items-center gap-1.5 text-muted">
+            <p className="flex items-center justify-center gap-1.5 text-muted sm:justify-start">
               <Mail className="size-4 shrink-0" aria-hidden />
               <span className="min-w-0 break-all">{user.email}</span>
             </p>
           )}
-          {sharedCount !== null && (
-            <Link href="/?tab=shared" className="link group mt-2 text-sm">
-              <Users className="size-4" aria-hidden />
-              {sharedCount} {sharedCount === 1 ? "list" : "lists"} shared with you
-              <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-1" aria-hidden />
-            </Link>
-          )}
         </div>
+        {user && (
+          <button onClick={() => setEditing(true)} className="btn-secondary text-sm">
+            <Pencil className="icon-nudge" aria-hidden />
+            Edit profile
+          </button>
+        )}
+      </section>
+
+      {user && editing && (
+        <EditProfileDialog
+          user={user}
+          onClose={() => setEditing(false)}
+          onSaved={(updated) => {
+            setUser(updated);
+            setEditing(false);
+            // Tell the header (it keeps its own copy of me).
+            window.dispatchEvent(new CustomEvent(ME_UPDATED_EVENT, { detail: updated }));
+          }}
+        />
+      )}
+
+      <section className="flex flex-col gap-3">
+        <div>
+          <h2 className="flex items-center gap-2 text-xl font-semibold">
+            <Users className="size-5 text-accent" aria-hidden />
+            Shared lists
+          </h2>
+          <p className="text-sm text-muted">Lists other people shared with you. Tap one to open it.</p>
+        </div>
+        <ErrorText message={sharedError} />
+        {shared === null ? (
+          <Loading />
+        ) : shared.length === 0 ? (
+          !sharedError && (
+            <div className="card flex animate-fade-up flex-col items-center gap-3 py-8 text-center text-muted">
+              <Users className="size-8 animate-float text-accent/70" aria-hidden />
+              <p>No lists are shared with you yet.</p>
+            </div>
+          )
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {shared.map((f) => (
+              <li key={f.id}>
+                <Link
+                  href={`/folders/${f.id}`}
+                  className="card group flex animate-fade-up items-center gap-3 py-3 transition-colors hover:border-accent/60 hover:bg-surface-2"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium wrap-break-word">{f.name}</span>
+                      <StatusBadge status={f.status} />
+                    </div>
+                    <p className="mt-1 text-xs text-muted">
+                      Shared by <span className="text-accent">{f.sharedBy?.name ?? "someone"}</span>
+                      {!f.canCheck && " · view only"}
+                      {f.canCheck && !f.canEdit && " · you can tick items"}
+                      {f.canEdit && " · you can edit items"}
+                    </p>
+                    <div className="mt-2">
+                      <ProgressBar done={f.doneCount} total={f.itemCount} size="sm" />
+                    </div>
+                  </div>
+                  <ChevronRight className="size-5 shrink-0 text-muted transition-transform group-hover:translate-x-1" aria-hidden />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section className="flex flex-col gap-3">
@@ -187,5 +258,102 @@ function SavedItemRow({
         </button>
       </div>
     </li>
+  );
+}
+
+/** "Edit profile" dialog: the name can change; the email is shown but locked. */
+function EditProfileDialog({
+  user,
+  onClose,
+  onSaved,
+}: {
+  user: SessionUser;
+  onClose: () => void;
+  onSaved: (user: SessionUser) => void;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const [name, setName] = useState(user.name);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  // A real modal: focus stays inside, Esc closes, the page behind is inert.
+  useEffect(() => {
+    ref.current?.showModal();
+  }, []);
+
+  async function save(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed) return setError("Please enter your name");
+    if (trimmed === user.name) return ref.current?.close();
+    setSaving(true);
+    setError("");
+    try {
+      onSaved(await apiFetch<SessionUser>("/api/auth/me", { method: "PATCH", body: JSON.stringify({ name: trimmed }) }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <dialog
+      ref={ref}
+      onClose={onClose}
+      // A click on the dimmed backdrop (the dialog itself, outside the form) closes it.
+      onClick={(e) => e.target === ref.current && ref.current.close()}
+      className="m-auto w-[min(26rem,calc(100vw-2rem))] rounded-lg border border-border bg-surface p-0 text-fg backdrop:bg-bg/80"
+      aria-labelledby="edit-profile-title"
+    >
+      <form onSubmit={save} className="flex flex-col gap-4 p-5">
+        <div className="flex items-center justify-between">
+          <h2 id="edit-profile-title" className="text-lg font-semibold">
+            Edit profile
+          </h2>
+          <button type="button" onClick={() => ref.current?.close()} className="btn-ghost px-2 py-1" title="Close">
+            <X className="icon-nudge" aria-hidden />
+            <span className="sr-only">Close</span>
+          </button>
+        </div>
+
+        {/* Live preview of the new initial. */}
+        <div className="flex justify-center">
+          <Avatar name={name.trim() || user.name} size="lg" />
+        </div>
+
+        <label className="flex flex-col gap-1 text-sm">
+          Name
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={LIMITS.USER_NAME_MAX}
+            required
+            autoFocus
+            autoComplete="name"
+            className="input"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="flex items-center gap-1">
+            Email
+            <Lock className="size-3.5 text-muted" aria-hidden />
+          </span>
+          <input value={user.email} readOnly disabled className="input cursor-not-allowed opacity-70" />
+          <span className="text-xs text-muted">Your email is your login, so it can&apos;t be changed.</span>
+        </label>
+
+        <ErrorText message={error} />
+
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={() => ref.current?.close()} className="btn-ghost text-sm">
+            Cancel
+          </button>
+          <button className="btn-primary text-sm" disabled={saving || !name.trim()}>
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </form>
+    </dialog>
   );
 }

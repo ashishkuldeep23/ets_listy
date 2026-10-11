@@ -48,7 +48,7 @@ src/
     page.tsx                 # home page
     login/, signup/          # auth pages (use components/AuthForm.tsx)
     folders/[id]/page.tsx    # one folder (components/FolderView.tsx)
-    api/auth/signup|login|logout|me/route.ts
+    api/auth/signup|login|logout|me/route.ts  # me: GET, PATCH { name } (email can't change)
     api/folders/route.ts     # GET ?scope=mine|shared&status= (+ counts, perms, progress), POST create
     api/folders/[id]/route.ts # GET (+ canCheck/canEdit/canManage), PATCH, DELETE (+ its items)
     api/folders/[id]/items/route.ts              # GET items + counts, POST (canEdit)
@@ -63,13 +63,21 @@ src/
     api/share/[token]/accept/route.ts            # POST: join via link (logged in, rate-limited)
     api/share/[token]/items/[itemId]/toggle/route.ts # POST { done }: tick via link, no login (link canCheck, rate-limited, live "by Guest")
     api/pusher/auth/route.ts                     # private channel auth (folder: getFolderAccess, user: self)
+    api/folders/[id]/presence/route.ts           # POST heartbeat / { leave } → who has the list open (any member)
+    api/folders/[id]/chat/route.ts               # GET ?after=, POST { text } (any member; send needs 2+ here)
+    api/share/[token]/presence|chat/route.ts     # same for guests: no login, x-listy-guest header, rate-limited
+    api/chat/recent/route.ts                     # GET ?after=: new messages in my lists (toast fallback without Pusher)
     share/[token]/page.tsx   # open to everyone: logged in → join; guest → PublicListView (read-only)
     api/saved-items/route.ts                     # GET ?q= (my saved items), POST (upsert)
     api/saved-items/[id]/route.ts                # PATCH (409 on duplicate), DELETE
     api/users/search/route.ts                    # GET ?q= (name/email prefix, max 8, not me; invite box)
     profile/page.tsx         # my profile + saved items (components/ProfileView.tsx)
   components/
-    Header.tsx               # top bar with user name + Logout
+    Header.tsx               # top bar: avatar + first name (→ profile), Logout, ChatToasts
+    Avatar.tsx               # round initial "logo" (+ initialOf, firstNameOf)
+    ListChat.tsx             # bottom-right chat button + panel on a list (members + guests), presence heartbeat
+    ChatToasts.tsx           # toasts for new messages in my lists, except on that list's own page
+    ViewersButton.tsx        # "N viewing" pill; tap → who is here (name + email for members, guests "Anonymous")
     AuthForm.tsx             # shared login/signup form
     FolderList.tsx           # home: tabs My folders / Shared with me (?tab=shared), status chips
     FolderView.tsx           # folder page body
@@ -90,11 +98,12 @@ src/
     SaveOfflineButton.tsx    # "Save offline" on a list (folder + share page); keeps the copy fresh, syncs offline ticks
     OfflineListView.tsx      # list page with no internet: saved copy, local ticks, auto-retry
     ServiceWorker.tsx        # registers public/sw.js (production only)
-    ProfileView.tsx          # profile page body
+    ProfileView.tsx          # profile: avatar, Edit profile dialog (name; email locked), Shared lists, saved items
   hooks/
     useSavedItems.ts         # debounced saved-items search, shared by picker + profile
     useChannel.ts            # subscribe to a Pusher channel while mounted (+ refetch after reconnect)
     useMe.ts                 # current user (fetched per mount, no cache)
+    usePresence.ts           # heartbeat + who has a list open, shared by ViewersButton and ListChat
     useOnline.ts             # navigator.onLine as a hook (a hint only; a failed fetch also means offline)
   lib/
     db.ts          # cached Mongoose connection: always use connectDB()
@@ -117,6 +126,9 @@ src/
     rateLimit.ts   # in-memory rate limiter (per process only)
     offlineLists.ts # "Save offline" copies in localStorage (by page path) + offline ticks; cleared on logout
     offlineSync.ts # browser only: page cache for public/sw.js, sends offline ticks when back online
+    chat.ts        # list chat + presence handlers shared by member and guest routes; userChatter / guestChatter
+    presence.ts    # in-memory "who has this list open" (per process, like rateLimit.ts)
+    guestId.ts     # browser: random guest id in localStorage, sent as x-listy-guest
     safeRedirect.ts # safeNextPath() for ?next= redirects
     limits.ts      # size limits shared by validators and schemas
     validators.ts  # request body validation
@@ -128,6 +140,7 @@ src/
     SavedItem.ts   # private per user; unique owner+nameKey+categoryKey (case-insensitive)
     Share.ts       # folder + sharedWith (unique), canCheck/canEdit; normalize/mergePermissions()
     ShareLink.ts   # one per folder; random 32-char token (newShareToken), enabled flag
+    ChatMessage.ts # list chat message; authorKey (never sent) marks "mine"; deleted with the folder
   test/
     setup.ts       # setupTestDb(), makeRequest(), routeCtx(), json<T>(), createUserAndCookie()
 ```
@@ -200,7 +213,7 @@ src/
    data. React escapes text by default, so keep it that way.
 6. **Limit sizes** of every string and array (see `lib/limits.ts`). User text
    used in a `$regex` must go through `escapeRegex()` first.
-7. **Every API route except `/api/auth/*` and `GET /api/share/[token]` starts with `requireUser(request)`**
+7. **Every API route except `/api/auth/*` and the guest share routes (`GET /api/share/[token]`, its tick route, and `/api/share/[token]/presence|chat`) starts with `requireUser(request)`**
    and scopes its queries to that user. `src/proxy.ts` only redirects pages;
    it is not an API guard. The one public data route, `GET /api/share/[token]`,
    is read-only, needs an enabled share link, is rate-limited, and returns
@@ -211,7 +224,8 @@ src/
    Sharing is decided **only** inside `getFolderAccess()` (owner, or a Share
    row). Edit always includes tick: write permissions via
    `normalizePermissions()`. Only `UserRef` (id + name) is sent about other
-   people; the owner's share list is the one place emails appear.
+   people; emails appear only in the owner's share list and in the viewers list
+   (`…/presence`), which sends them to logged-in members of that list only, never to link guests.
    Folder and item routes decide access **only** via `getFolderAccess()`
    (null → 404, missing flag → 403). Item queries always filter by the
    folder from the URL too, so an item can't be reached through another folder. Send API data through `serialize*()`
@@ -221,7 +235,10 @@ src/
    hashes). Only `private-` channels; `/api/pusher/auth` must check access
    with `getFolderAccess()`. `PUSHER_SECRET` is server-only. Tests mock the
    `pusher` module (see `withPusherEnv()` in `src/test/setup.ts`).
-   Folder channel: item/group/folder/access events (see `lib/channels.ts`).
+   Folder channel: item/group/folder/access/chat.message events (see `lib/channels.ts`).
+   Guest chat routes need an enabled link, are rate-limited per IP, and know the
+   guest only by a hashed random id (shown as "Guest XXXX"); chat messages carry
+   names only. User channel `chat.notice` drives the message toasts.
    User channel: `folder.progress` (to owner + all shared users after item
    add/tick/delete and folder delete) and `folder.access` (to one user when
    they gain or lose a folder).

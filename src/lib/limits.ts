@@ -24,4 +24,10 @@ export const LIMITS = {
   SHARES_PER_FOLDER: 50,
   USER_SEARCH_MIN: 2,
   USER_SEARCH_RESULTS: 8,
+
+  CHAT_MESSAGE_MAX: 1000,
+  /** Messages loaded when the chat opens. */
+  CHAT_HISTORY: 50,
+  /** People tracked per list (bounds memory if someone floods fake guest ids). */
+  PRESENCE_PER_FOLDER: 100,
 } as const;

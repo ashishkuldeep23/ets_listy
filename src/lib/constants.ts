@@ -25,3 +25,17 @@ export function isFolderStatus(value: unknown): value is FolderStatus {
 export function getStatus(value: unknown): FolderStatusInfo {
   return FOLDER_STATUSES.find((s) => s.value === value) ?? FOLDER_STATUSES[0];
 }
+
+/* ---------- list chat ---------- */
+
+/** Chat opens only when at least this many people have the list open. */
+export const CHAT_MIN_PEOPLE = 2;
+
+/** Header a guest (share link, not logged in) sends with chat requests: their random id. */
+export const GUEST_ID_HEADER = "x-listy-guest";
+
+/** Shape of a guest id (random, made in the browser). */
+export const GUEST_ID_RE = /^[A-Za-z0-9_-]{16,64}$/;
+
+/** Window event fired after I change my profile (detail: SessionUser), so the header updates. */
+export const ME_UPDATED_EVENT = "listy:me-updated";

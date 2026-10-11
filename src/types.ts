@@ -178,3 +178,54 @@ export interface FolderAccessEvent {
 
 /** Result of a request-body validator: only allowed fields, or an error. */
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
+
+/** One chat message on a list. Names only, never emails. */
+export interface ChatMessageDTO {
+  id: string;
+  folderId: string;
+  text: string;
+  authorName: string;
+  /** The author's user id, or null for a guest (share link, not logged in). */
+  authorId: string | null;
+  /** Written by whoever asked (set per request; false in live events). */
+  mine: boolean;
+  createdAt: string | Date;
+}
+
+/** GET …/chat */
+export interface ChatListResponse {
+  messages: ChatMessageDTO[];
+}
+
+/** Someone who has the list open right now. */
+export interface ActivePerson {
+  /** A guest's label ("Guest 3FA2"); the UI shows guests as "Anonymous". */
+  name: string;
+  /** Only sent to logged-in members of the list; null for guests and for guest viewers. */
+  email: string | null;
+  guest: boolean;
+  me: boolean;
+}
+
+/** POST …/presence */
+export interface PresenceResponse {
+  people: ActivePerson[];
+  /** Newest message time, so the chat button can show an unread dot. */
+  lastMessageAt: string | Date | null;
+}
+
+/** User channel `chat.notice` / GET /api/chat/recent: a message in a list I'm in (for the toast). */
+export interface ChatNoticeEvent {
+  id: string;
+  folderId: string;
+  folderName: string;
+  authorName: string;
+  /** Start of the message only. */
+  text: string;
+  createdAt: string | Date;
+}
+
+/** GET /api/chat/recent */
+export interface ChatNoticeResponse {
+  notices: ChatNoticeEvent[];
+}

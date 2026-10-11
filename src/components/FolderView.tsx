@@ -33,6 +33,8 @@ import GroupSection from "@/components/GroupSection";
 import Loading from "@/components/Loading";
 import ItemForm, { type ItemFormValues } from "@/components/ItemForm";
 import ItemRow from "@/components/ItemRow";
+import ListChat from "@/components/ListChat";
+import ViewersButton from "@/components/ViewersButton";
 import OfflineListView from "@/components/OfflineListView";
 import ProgressBar from "@/components/ProgressBar";
 import SaveOfflineButton from "@/components/SaveOfflineButton";
@@ -41,6 +43,7 @@ import SharePanel from "@/components/SharePanel";
 import StatusBadge from "@/components/StatusBadge";
 import { useChannel } from "@/hooks/useChannel";
 import { useOnline } from "@/hooks/useOnline";
+import { usePresence } from "@/hooks/usePresence";
 import { useSavedItems } from "@/hooks/useSavedItems";
 import { ApiError, apiFetch } from "@/lib/apiClient";
 import { EVENTS, folderChannel } from "@/lib/channels";
@@ -71,6 +74,8 @@ export default function FolderView() {
   const [folder, setFolder] = useState<FolderDetailDTO | null>(null);
   const [items, setItems] = useState<ItemDTO[]>([]);
   const [state, setState] = useState<LoadState>("loading");
+  // Who has this list open (viewers pill + chat); starts once the list loaded.
+  const presence = usePresence(`/api/folders/${id}`, false, state === "ready");
   const [error, setError] = useState("");
   const [showPicker, setShowPicker] = useState(false);
   const [showShare, setShowShare] = useState(false);
@@ -308,7 +313,8 @@ export default function FolderView() {
   const sections = groupItems(items);
 
   return (
-    <div>
+    // Bottom padding keeps the last card clear of the chat button.
+    <div className="pb-20">
       <Link href="/" className="link group text-sm">
         <ArrowLeft className="size-4 transition-transform duration-200 group-hover:-translate-x-1" aria-hidden />
         All lists
@@ -317,6 +323,7 @@ export default function FolderView() {
         <h1 className="text-2xl font-semibold wrap-break-word text-primary">{folder.name}</h1>
         <StatusBadge status={folder.status} />
         <div className="ml-auto flex gap-2">
+          <ViewersButton people={presence.people} />
           <SaveOfflineButton
             path={path}
             name={folder.name}
@@ -445,6 +452,8 @@ export default function FolderView() {
           </div>
         </div>
       )}
+
+      <ListChat base={`/api/folders/${folder.id}`} folderId={folder.id} presence={presence} />
     </div>
   );
 }

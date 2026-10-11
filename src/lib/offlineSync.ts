@@ -32,7 +32,10 @@ export async function cachePageForOffline(path: string): Promise<void> {
 }
 
 export async function uncachePage(path: string): Promise<void> {
-  if (hasCacheApi()) await (await caches.open(OFFLINE_CACHE)).delete(path);
+  if (!hasCacheApi()) return;
+  const cache = await caches.open(OFFLINE_CACHE);
+  // The page and its data request (see dataKey in public/sw.js).
+  await Promise.all([cache.delete(path), cache.delete(`${path}?offline-data`)]);
 }
 
 /** Drops all cached pages (on logout). */

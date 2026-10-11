@@ -20,6 +20,10 @@ export const EVENTS = {
   accessChanged: "access.changed",
   folderProgress: "folder.progress",
   folderAccess: "folder.access",
+  /** Folder channel: a new chat message (ChatMessageDTO). */
+  chatMessage: "chat.message",
+  /** User channel: someone wrote in a list I'm in (ChatNoticeEvent), for the toast. */
+  chatNotice: "chat.notice",
 } as const;
 
 /** Header the browser sends with writes, so the sender doesn't get its own event back. */

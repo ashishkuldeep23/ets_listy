@@ -3,6 +3,7 @@ import { getFolderAccess, permissionsOf } from "@/lib/access";
 import { validateUpdateFolder } from "@/lib/validators";
 import { jsonError, readJson, serverError } from "@/lib/http";
 import { Folder, serializeFolder } from "@/models/Folder";
+import { ChatMessage } from "@/models/ChatMessage";
 import { Item } from "@/models/Item";
 import { Share } from "@/models/Share";
 import { ShareLink } from "@/models/ShareLink";
@@ -88,6 +89,7 @@ export async function DELETE(request: Request, ctx: Ctx): Promise<Response> {
     await Item.deleteMany({ folder: access.folder._id });
     await Share.deleteMany({ folder: access.folder._id });
     await ShareLink.deleteMany({ folder: access.folder._id });
+    await ChatMessage.deleteMany({ folder: access.folder._id });
     await Folder.deleteOne({ _id: access.folder._id });
     await publishFolderEvent(id, EVENTS.folderDeleted, { folderId: id }, getSocketId(request));
     const gone: FolderProgressEvent = { folderId: id, itemCount: 0, doneCount: 0, deleted: true };

@@ -1,5 +1,5 @@
 import { LIMITS } from "@/lib/limits";
-import { STATUS_VALUES, isFolderStatus, type FolderStatus } from "@/lib/constants";
+import { GUEST_ID_RE, STATUS_VALUES, isFolderStatus, type FolderStatus } from "@/lib/constants";
 import type { Result } from "@/types";
 
 // Plain validators for request bodies. Each takes `unknown` (whatever the
@@ -399,4 +399,46 @@ export function validateShareLink(body: unknown): Result<ShareLinkInput> {
     value.enabled = body.enabled;
   }
   return { ok: true, value };
+}
+
+/* ---------- profile ---------- */
+
+/** Body for PATCH /api/auth/me: { name }. The email identifies the account and can't change. */
+export function validateProfileUpdate(body: unknown): Result<{ name: string }> {
+  if (!isPlainObject(body)) return fail("body must be a JSON object");
+  if ("email" in body) return fail("email can't be changed");
+  const name = cleanName(body.name);
+  if (name.error !== undefined) return fail(name.error);
+  return { ok: true, value: { name: name.value } };
+}
+
+/* ---------- list chat ---------- */
+
+/** Body for POST …/chat: { text }. Newlines are kept; the text is trimmed. */
+export function validateChatMessage(body: unknown): Result<{ text: string }> {
+  if (!isPlainObject(body) || typeof body.text !== "string") return fail("text must be a string");
+  const text = body.text.trim();
+  if (!text) return fail("message is empty");
+  if (text.length > LIMITS.CHAT_MESSAGE_MAX) return fail(`message must be at most ${LIMITS.CHAT_MESSAGE_MAX} characters`);
+  return { ok: true, value: { text } };
+}
+
+/** Body for POST …/presence: optional { leave: true } when the page closes. Empty body = heartbeat. */
+export function validatePresence(body: unknown): Result<{ leave: boolean }> {
+  if (body === null) return { ok: true, value: { leave: false } };
+  if (!isPlainObject(body)) return fail("body must be a JSON object");
+  if (body.leave !== undefined && typeof body.leave !== "boolean") return fail("leave must be true or false");
+  return { ok: true, value: { leave: body.leave === true } };
+}
+
+/** A guest's id from the request header, or null if missing / malformed. */
+export function cleanGuestId(value: string | null): string | null {
+  return value && GUEST_ID_RE.test(value) ? value : null;
+}
+
+/** ?after= on chat reads: an ISO date. null = not given; undefined = invalid. */
+export function cleanAfter(value: string | null): Date | null | undefined {
+  if (value === null || value === "") return null;
+  const date = new Date(value);
+  return value.length <= 40 && !Number.isNaN(date.getTime()) ? date : undefined;
 }
