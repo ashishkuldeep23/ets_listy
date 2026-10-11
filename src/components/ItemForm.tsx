@@ -101,7 +101,7 @@ export default function ItemForm({
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Item name (e.g. Milk)"
+          placeholder="new item name (e.g. Milk)"
           maxLength={LIMITS.ITEM_NAME_MAX}
           required
           autoFocus={Boolean(initial)}

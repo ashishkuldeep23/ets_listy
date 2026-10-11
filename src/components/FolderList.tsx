@@ -181,13 +181,13 @@ export default function FolderList() {
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="List name (e.g. Market, Oct)"
+            placeholder="new list name (e.g. Market, Oct)"
             maxLength={60}
             className="input min-w-0 flex-1"
           />
           <button className="btn-primary w-full sm:w-auto">
-            <ListPlus className="icon-nudge" aria-hidden />
-            Add
+            <ListPlus className="icon-nudge font-bold" aria-hidden />
+            {/* Add */}
           </button>
         </form>
       )}

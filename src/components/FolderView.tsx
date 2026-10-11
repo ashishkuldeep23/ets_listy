@@ -311,7 +311,8 @@ export default function FolderView() {
             <ItemForm
               key={prefill?.key ?? "new"}
               initial={prefill?.item}
-              submitLabel="Add"
+              // submitLabel="Add"
+              submitLabel=""
               groups={groups}
               showSaveToProfile
               onSubmit={addItem}
