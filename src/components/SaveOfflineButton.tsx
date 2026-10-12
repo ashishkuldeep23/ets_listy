@@ -30,6 +30,15 @@ export default function SaveOfflineButton({ path, name, status, items, toggleBas
     if (saved) saveOfflineList({ path, name, status, items, toggleBase });
   }, [saved, path, name, status, items, toggleBase]);
 
+  // Re-save the page itself once per visit: the browser may have evicted it,
+  // or it was saved by an older version of the app that kept less.
+  const savedOnMount = useRef(saved);
+  useEffect(() => {
+    if (savedOnMount.current && navigator.onLine) {
+      cachePageForOffline(path).catch((err: unknown) => console.error("Offline page cache failed", err));
+    }
+  }, [path]);
+
   // Send offline ticks now, when the connection returns, and on a timer
   // (a request right after "online" can still fail, or hang on a weak signal).
   useEffect(() => {

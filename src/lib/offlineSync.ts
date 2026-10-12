@@ -26,16 +26,36 @@ export async function cachePageForOffline(path: string): Promise<void> {
     .map((entry) => new URL(entry.name))
     .filter((url) => url.origin === location.origin && url.pathname.startsWith("/_next/static/"))
     .map((url) => url.href);
-  await cache.add(path);
+  // Not cache.add(): it follows redirects, and a logged-out visit would save the login page as the list.
+  const page = await fetch(path, { credentials: "same-origin" });
+  if (!page.ok || page.redirected) return;
+  await cache.put(path, page);
+  await loadPageDataOnce(cache, path);
   // One asset failing (e.g. an old chunk) shouldn't stop the rest.
   await Promise.all(assets.map((href) => cache.add(href).catch(() => {})));
+}
+
+/**
+ * The cached HTML is only a shell: its inline `__NEXT_CLIENT_RESUME` script
+ * fetches the list itself. Makes that same request now (URL and headers read
+ * from the HTML), so the service worker keeps its answer and the page loads
+ * offline straight after saving. Does nothing if the script isn't there.
+ */
+async function loadPageDataOnce(cache: Cache, path: string): Promise<void> {
+  const html = await (await cache.match(path))?.text();
+  const resume = html?.match(/__NEXT_CLIENT_RESUME=fetch\(location\.pathname\+'(\?_rsc=[^']*)',\{[^}]*headers:\{([^}]*)\}/);
+  const [, query, headerList] = resume ?? [];
+  if (!query || !headerList) return;
+  const headers = Object.fromEntries([...headerList.matchAll(/'([^']+)':\s*'([^']*)'/g)].map((m) => [m[1] ?? "", m[2] ?? ""]));
+  await fetch(path + query, { credentials: "same-origin", headers });
 }
 
 export async function uncachePage(path: string): Promise<void> {
   if (!hasCacheApi()) return;
   const cache = await caches.open(OFFLINE_CACHE);
-  // The page and its data request (see dataKey in public/sw.js).
-  await Promise.all([cache.delete(path), cache.delete(`${path}?offline-data`)]);
+  // The page and its data requests (see dataKey in public/sw.js; the last one is the old format).
+  const keys = [path, `${path}?offline-data=full`, `${path}?offline-data=nav`, `${path}?offline-data`];
+  await Promise.all(keys.map((key) => cache.delete(key)));
 }
 
 /** Drops all cached pages (on logout). */
