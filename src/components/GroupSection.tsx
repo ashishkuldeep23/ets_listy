@@ -1,11 +1,13 @@
 "use client";
 
 // One group of items on the folder page: a header (name, progress,
-// collapse, rename) and its item rows.
+// collapse, rename) and its item rows. On "Ungrouped", rename means
+// "give all these items a group".
 
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Check, ChevronRight, Layers, Pencil, X } from "lucide-react";
 import Combobox from "@/components/Combobox";
+import ErrorText from "@/components/ErrorText";
 import { LIMITS } from "@/lib/limits";
 
 interface GroupSectionProps {
@@ -16,7 +18,7 @@ interface GroupSectionProps {
   canEdit: boolean;
   /** All group names in the folder, offered when renaming (picking one merges into it). */
   groups?: string[];
-  /** Return true when renamed. */
+  /** Return true when renamed. For "Ungrouped", `to` is always a name. */
   onRename: (to: string | null) => Promise<boolean>;
   children: ReactNode;
 }
@@ -25,11 +27,30 @@ export default function GroupSection({ name, done, total, canEdit, groups = [], 
   const [open, setOpen] = useState(true);
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(name ?? "");
+  const [draftError, setDraftError] = useState("");
+  const ungrouped = name === null;
+  const actionLabel = ungrouped ? "Group these items" : "Rename group";
+
+  function stopRenaming() {
+    setDraft(name ?? "");
+    setDraftError("");
+    setRenaming(false);
+  }
 
   async function rename(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    // An empty name moves the items to "Ungrouped".
-    if (await onRename(draft.trim() || null)) setRenaming(false);
+    const to = draft.trim();
+    // Ungrouped items need a name; for a real group an empty name moves its items to "Ungrouped".
+    if (ungrouped && !to) {
+      setDraftError("Enter a group name");
+      return;
+    }
+    // Same name as now: nothing to do.
+    if (to === (name ?? "")) {
+      stopRenaming();
+      return;
+    }
+    if (await onRename(to || null)) stopRenaming();
   }
 
   return (
@@ -51,23 +72,27 @@ export default function GroupSection({ name, done, total, canEdit, groups = [], 
           </span>
         </button>
 
-        {canEdit && name && !renaming && (
-          <button onClick={() => setRenaming(true)} className="link ml-auto text-xs" title="Rename group">
+        {canEdit && !renaming && (
+          <button onClick={() => setRenaming(true)} className="link ml-auto text-xs" title={actionLabel}>
             <Pencil className="size-3.5" aria-hidden />
-            <span className="sr-only">Rename group</span>
+            <span className="sr-only">{actionLabel}</span>
           </button>
         )}
         {renaming && (
           <form onSubmit={rename} className="ml-auto flex gap-2">
             <Combobox
               value={draft}
-              onChange={setDraft}
+              onChange={(v) => {
+                setDraft(v);
+                setDraftError("");
+              }}
               options={groups
                 .filter((g) => g !== name && g.toLowerCase().includes(draft.trim().toLowerCase()))
                 .map((g) => ({ key: g, value: g, label: `Move into "${g}"` }))}
               maxLength={LIMITS.ITEM_GROUP_MAX}
               autoFocus
-              aria-label="New group name"
+              placeholder={ungrouped ? "Group name" : undefined}
+              aria-label={ungrouped ? "Group name for these items" : "New group name"}
               className="input w-full py-1 text-sm"
             />
             <button className="btn-secondary text-sm" title="Save">
@@ -76,10 +101,7 @@ export default function GroupSection({ name, done, total, canEdit, groups = [], 
             </button>
             <button
               type="button"
-              onClick={() => {
-                setDraft(name ?? "");
-                setRenaming(false);
-              }}
+              onClick={stopRenaming}
               className="btn-ghost text-sm"
               title="Cancel"
             >
@@ -88,6 +110,7 @@ export default function GroupSection({ name, done, total, canEdit, groups = [], 
             </button>
           </form>
         )}
+        {renaming && draftError && <ErrorText message={draftError} className="w-full" />}
       </div>
 
       {open && <ul className="flex animate-fade-up flex-col gap-2">{children}</ul>}

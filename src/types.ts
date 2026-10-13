@@ -143,6 +143,20 @@ export interface ItemListResponse {
   groups: string[];
 }
 
+/** POST /api/folders/:id/groups/rename */
+export interface RenameGroupResponse {
+  updated: number;
+  /** Only when grouping the ungrouped items (from: null): exactly which items moved. */
+  itemIds?: string[];
+}
+
+/** group.renamed on a folder channel. `from: null` = the ungrouped items listed in `itemIds` got group `to`. */
+export interface GroupRenamedEvent {
+  from: string | null;
+  to: string | null;
+  itemIds?: string[];
+}
+
 /** An item saved to the user's profile for reuse in any folder. Private to its owner. */
 export interface SavedItemDTO {
   id: string;

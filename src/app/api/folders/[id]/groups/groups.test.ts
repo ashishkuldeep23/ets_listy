@@ -1,11 +1,13 @@
 import { describe, it, expect } from "vitest";
+import mongoose from "mongoose";
 import { createUserAndCookie, json, makeRequest, routeCtx, setupTestDb } from "@/test/setup";
 import { POST as createFolder } from "@/app/api/folders/route";
 import { GET as listItems, POST as createItem } from "@/app/api/folders/[id]/items/route";
 import { PATCH as updateItem } from "@/app/api/folders/[id]/items/[itemId]/route";
 import { POST as renameGroup } from "@/app/api/folders/[id]/groups/rename/route";
 import { Item } from "@/models/Item";
-import type { FolderDTO, ItemDTO, ItemListResponse } from "@/types";
+import { POST as shareFolder } from "@/app/api/folders/[id]/shares/route";
+import type { FolderDTO, ItemDTO, ItemListResponse, RenameGroupResponse } from "@/types";
 
 setupTestDb();
 
@@ -78,6 +80,91 @@ describe("item groups", () => {
     expect(after.items[0]?.group).toBeNull();
   });
 
+  it("names the ungrouped items: all of them (done or not) join the group, other groups untouched", async () => {
+    const { cookie } = await createUserAndCookie();
+    const market = await newFolder(cookie, "Market");
+    const other = await newFolder(cookie, "Other");
+    const soap = await add(cookie, market.id, { name: "Soap" });
+    const salt = await add(cookie, market.id, { name: "Salt" });
+    await Item.updateOne({ _id: salt.id }, { $set: { done: true } });
+    await add(cookie, market.id, { name: "Tomato", group: "Veg" });
+    await add(cookie, other.id, { name: "Brush" });
+
+    const res = await json<RenameGroupResponse>(await rename(cookie, market.id, { from: null, to: "Home" }));
+    expect(res.updated).toBe(2);
+    expect(res.itemIds?.sort()).toEqual([soap.id, salt.id].sort());
+
+    const after = await list(cookie, market.id);
+    expect(after.groups).toEqual(["Home", "Veg"]);
+    expect(after.items.every((i) => i.group !== null)).toBe(true);
+    expect(after.items.find((i) => i.name === "Salt")?.done).toBe(true);
+    // Another folder's ungrouped items are not touched.
+    expect((await list(cookie, other.id)).items[0]?.group).toBeNull();
+  });
+
+  it("naming the ungrouped items after an existing group merges into that group's spelling", async () => {
+    const { cookie } = await createUserAndCookie();
+    const folder = await newFolder(cookie);
+    await add(cookie, folder.id, { name: "Tomato", group: "Veg" });
+    await add(cookie, folder.id, { name: "Onion" });
+
+    await rename(cookie, folder.id, { from: null, to: "  vEG " });
+    const after = await list(cookie, folder.id);
+    expect(after.groups).toEqual(["Veg"]);
+    expect(after.items.map((i) => i.group)).toEqual(["Veg", "Veg"]);
+  });
+
+  it("also picks up older ungrouped items stored as null or empty", async () => {
+    const { cookie } = await createUserAndCookie();
+    const folder = await newFolder(cookie);
+    const a = await add(cookie, folder.id, { name: "A" });
+    const b = await add(cookie, folder.id, { name: "B" });
+    await Item.collection.updateOne({ _id: new mongoose.Types.ObjectId(a.id) }, { $set: { group: null } });
+    await Item.collection.updateOne({ _id: new mongoose.Types.ObjectId(b.id) }, { $set: { group: "" } });
+
+    const res = await json<RenameGroupResponse>(await rename(cookie, folder.id, { from: null, to: "Misc" }));
+    expect(res.updated).toBe(2);
+    expect((await list(cookie, folder.id)).groups).toEqual(["Misc"]);
+  });
+
+  it("naming the ungrouped items when there are none changes nothing", async () => {
+    const { cookie } = await createUserAndCookie();
+    const folder = await newFolder(cookie);
+    await add(cookie, folder.id, { name: "Tomato", group: "Veg" });
+    const res = await rename(cookie, folder.id, { from: null, to: "Misc" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ updated: 0, itemIds: [] });
+    expect((await list(cookie, folder.id)).groups).toEqual(["Veg"]);
+  });
+
+  it("naming the ungrouped items needs a name", async () => {
+    const { cookie } = await createUserAndCookie();
+    const folder = await newFolder(cookie);
+    await add(cookie, folder.id, { name: "Soap" });
+    for (const body of [{ from: null }, { from: null, to: "" }, { from: null, to: "  " }, { from: null, to: null }]) {
+      expect((await rename(cookie, folder.id, body)).status).toBe(400);
+    }
+    expect((await Item.findOne().lean())?.group).toBeUndefined();
+  });
+
+  it("tick-only members can't group the ungrouped items (403)", async () => {
+    const a = await createUserAndCookie({ email: "a@example.com" });
+    const b = await createUserAndCookie({ email: "b@example.com" });
+    const folder = await newFolder(a.cookie);
+    await add(a.cookie, folder.id, { name: "Soap" });
+    await shareFolder(
+      makeRequest(`/api/folders/${folder.id}/shares`, {
+        method: "POST",
+        body: { email: "b@example.com", canCheck: true },
+        cookie: a.cookie,
+      }),
+      routeCtx({ id: folder.id })
+    );
+
+    expect((await rename(b.cookie, folder.id, { from: null, to: "Hacked" })).status).toBe(403);
+    expect((await Item.findOne().lean())?.group).toBeUndefined();
+  });
+
   it("validates the rename body", async () => {
     const { cookie } = await createUserAndCookie();
     const folder = await newFolder(cookie);
@@ -93,6 +180,7 @@ describe("item groups", () => {
     await add(a.cookie, folder.id, { name: "Tomato", group: "Veg" });
 
     expect((await rename(b.cookie, folder.id, { from: "Veg", to: "Hacked" })).status).toBe(404);
+    expect((await rename(b.cookie, folder.id, { from: null, to: "Hacked" })).status).toBe(404);
     expect((await Item.findOne().lean())?.group).toBe("Veg");
   });
 });

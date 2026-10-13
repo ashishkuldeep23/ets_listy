@@ -182,6 +182,17 @@ describe("group validation", () => {
     expect(validateRenameGroup({ from: "Veg" })).toEqual({ ok: true, value: { from: "Veg", to: null } });
     expect(validateRenameGroup({ to: "X" }).ok).toBe(false);
   });
+
+  it("from: null names the ungrouped items, and then needs a to", () => {
+    expect(validateRenameGroup({ from: null, to: " Veg " })).toEqual({ ok: true, value: { from: null, to: "Veg" } });
+    expect(validateRenameGroup({ from: null, to: "" }).ok).toBe(false);
+    expect(validateRenameGroup({ from: null, to: "   " }).ok).toBe(false);
+    expect(validateRenameGroup({ from: null, to: null }).ok).toBe(false);
+    expect(validateRenameGroup({ from: null }).ok).toBe(false);
+    expect(validateRenameGroup({ from: "", to: "X" }).ok).toBe(false);
+    expect(validateRenameGroup({ from: null, to: { $ne: null } }).ok).toBe(false);
+    expect(validateRenameGroup({ from: null, to: "x".repeat(LIMITS.ITEM_GROUP_MAX + 1) }).ok).toBe(false);
+  });
 });
 
 describe("saveToProfile and saved-item validation", () => {

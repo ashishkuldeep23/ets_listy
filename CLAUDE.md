@@ -54,7 +54,7 @@ src/
     api/folders/[id]/items/route.ts              # GET items + counts, POST (canEdit)
     api/folders/[id]/items/[itemId]/route.ts     # PATCH, DELETE (canEdit)
     api/folders/[id]/items/[itemId]/toggle/route.ts # POST { done } (canCheck)
-    api/folders/[id]/groups/rename/route.ts      # POST { from, to } (canEdit)
+    api/folders/[id]/groups/rename/route.ts      # POST { from, to } (canEdit); from: null = name the ungrouped items
     api/folders/[id]/shares/route.ts             # GET, POST { email, canCheck, canEdit } (canManage)
     api/folders/[id]/shares/[userId]/route.ts    # PATCH perms (canManage), DELETE (canManage, or self = leave)
     api/folders/[id]/share-link/route.ts         # GET, POST { canCheck, canEdit, enabled } (canManage)

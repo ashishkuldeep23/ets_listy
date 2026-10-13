@@ -50,7 +50,16 @@ import { EVENTS, folderChannel } from "@/lib/channels";
 import { formatRupees } from "@/lib/format";
 import { getOfflineList } from "@/lib/offlineLists";
 import { computeTotals, groupItems } from "@/lib/totals";
-import type { FolderDTO, FolderDetailDTO, ItemDTO, ItemListResponse, SavedItemDTO, SessionUser } from "@/types";
+import type {
+  FolderDTO,
+  FolderDetailDTO,
+  GroupRenamedEvent,
+  ItemDTO,
+  ItemListResponse,
+  RenameGroupResponse,
+  SavedItemDTO,
+  SessionUser,
+} from "@/types";
 
 // "offline": the load failed for lack of network and there is a saved copy to show.
 type LoadState = "loading" | "ready" | "notFound" | "error" | "offline";
@@ -62,6 +71,18 @@ const savedKey = (name: string, category: string | null) =>
 /** True if `incoming` is at least as new as `current` (drops late, out-of-order events). */
 const isNewer = (incoming: ItemDTO, current: ItemDTO) =>
   new Date(incoming.updatedAt).getTime() >= new Date(current.updatedAt).getTime();
+
+/**
+ * Mirrors a group rename locally. Naming the ungrouped items moves only the
+ * ids the server moved, so an item someone added ungrouped meanwhile stays put.
+ */
+function applyGroupRename(items: ItemDTO[], { from, to, itemIds }: GroupRenamedEvent): ItemDTO[] {
+  if (from === null) {
+    const moved = new Set(itemIds ?? []);
+    return items.map((i) => (moved.has(i.id) ? { ...i, group: to } : i));
+  }
+  return items.map((i) => (i.group === from ? { ...i, group: to } : i));
+}
 
 export default function FolderView() {
   const { id } = useParams<{ id: string }>();
@@ -152,8 +173,7 @@ export default function FolderView() {
         setItems((prev) => prev.filter((i) => i.id !== itemId));
       },
       [EVENTS.groupRenamed]: (data) => {
-        const { from, to } = data as { from: string; to: string | null };
-        setItems((prev) => prev.map((i) => (i.group === from ? { ...i, group: to } : i)));
+        setItems((prev) => applyGroupRename(prev, data as GroupRenamedEvent));
       },
       [EVENTS.folderUpdated]: (data) => {
         const { folder: f } = data as { folder: FolderDTO };
@@ -270,12 +290,20 @@ export default function FolderView() {
     });
 
   // Renames a group on the server, then mirrors it locally (no refetch needed).
-  const renameGroup = (from: string, typed: string | null) =>
+  // `from: null` names the "Ungrouped" items: they all move into group `typed`.
+  const renameGroup = (from: string | null, typed: string | null) =>
     run(async () => {
+      if (from === null && !typed) throw new Error("Enter a group name");
       // Renaming onto another group in a different case merges into it (the server does the same).
       const to = typed && (groups.find((g) => g !== from && g.toLowerCase() === typed.toLowerCase()) ?? typed);
-      await apiFetch(`/api/folders/${folder.id}/groups/rename`, { method: "POST", body: JSON.stringify({ from, to }) });
-      setItems((prev) => prev.map((i) => (i.group === from ? { ...i, group: to } : i)));
+      const res = await apiFetch<RenameGroupResponse>(`/api/folders/${folder.id}/groups/rename`, {
+        method: "POST",
+        body: JSON.stringify({ from, to }),
+      });
+      setItems((prev) => applyGroupRename(prev, { from, to, itemIds: res.itemIds }));
+      // Nothing was ungrouped on the server any more (e.g. grouped from another screen
+      // without live updates): reload so this screen stops showing stale items.
+      if (from === null && res.updated === 0) refetch();
     });
 
   // Optimistic: flip the tick at once, then undo it if the server says no.
@@ -410,7 +438,7 @@ export default function FolderView() {
               total={sectionItems.length}
               canEdit={folder.canEdit}
               groups={groups}
-              onRename={(to) => renameGroup(key, to)}
+              onRename={(to) => renameGroup(key || null, to)}
             >
               {sectionItems.map((item) => (
                 <ItemRow

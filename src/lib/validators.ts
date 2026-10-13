@@ -281,20 +281,25 @@ export function validateToggle(body: unknown): Result<{ done: boolean }> {
 }
 
 export interface RenameGroupInput {
-  from: string;
+  /** null = the "Ungrouped" items (gives them all a group). */
+  from: string | null;
   /** null = move the items out of any group ("Ungrouped"). */
   to: string | null;
 }
 
-/** Body for POST /api/folders/:id/groups/rename: { from, to }. */
+/** Body for POST /api/folders/:id/groups/rename: { from, to }. `from: null` groups the ungrouped items. */
 export function validateRenameGroup(body: unknown): Result<RenameGroupInput> {
   if (!isPlainObject(body)) return fail("body must be a JSON object");
+  // `from` must be sent: a missing one is a mistake, an explicit null means "Ungrouped".
+  if (body.from === undefined) return fail("from is required");
   const from = cleanOptionalText(body.from, "from", LIMITS.ITEM_GROUP_MAX);
   if (from.error !== undefined) return fail(from.error);
-  if (!from.value) return fail("from is required");
+  if (body.from !== null && !from.value) return fail("from is required");
   const to = cleanOptionalText(body.to ?? null, "to", LIMITS.ITEM_GROUP_MAX);
   if (to.error !== undefined) return fail(to.error);
-  return { ok: true, value: { from: from.value, to: to.value ?? null } };
+  // Ungrouped → ungrouped would change nothing.
+  if (from.value == null && !to.value) return fail("Enter a group name");
+  return { ok: true, value: { from: from.value ?? null, to: to.value ?? null } };
 }
 
 /* ---------- saved items ---------- */

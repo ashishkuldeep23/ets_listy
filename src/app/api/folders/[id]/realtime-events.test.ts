@@ -103,6 +103,22 @@ describe("live folder events", () => {
     expect(published()[2]?.[2]).toEqual({ folderId: folder.id });
   });
 
+  it("naming the ungrouped items publishes exactly which items moved", async () => {
+    const { a, folder } = await setup();
+    const f = routeCtx({ id: folder.id });
+    const soap = await json<ItemDTO>(await createItem(req(a, `/api/folders/${folder.id}/items`, "POST", { name: "Soap" }), f));
+    trigger.mockClear();
+
+    await renameGroup(req(a, `/api/folders/${folder.id}/groups/rename`, "POST", { from: null, to: "Home" }), f);
+    expect(eventsSent()).toEqual([EVENTS.groupRenamed]);
+    expect(published()[0]?.[2]).toEqual({ from: null, to: "Home", itemIds: [soap.id] });
+
+    // Nothing left ungrouped: no event.
+    trigger.mockClear();
+    await renameGroup(req(a, `/api/folders/${folder.id}/groups/rename`, "POST", { from: null, to: "Home" }), f);
+    expect(eventsSent()).toEqual([]);
+  });
+
   it("permission changes and removals tell open screens to re-check access", async () => {
     const { a, b, folder } = await setup();
     const f = routeCtx({ id: folder.id });
