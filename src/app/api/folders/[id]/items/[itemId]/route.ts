@@ -1,11 +1,12 @@
 import mongoose from "mongoose";
 import { requireUser } from "@/lib/auth";
 import { getFolderAccess } from "@/lib/access";
-import { existingGroupName, toItemUpdate } from "@/lib/items";
+import { completeFolderIfAllDone, existingGroupName, toItemUpdate } from "@/lib/items";
 import { getSocketId, publishFolderEvent, publishFolderProgress } from "@/lib/realtime";
 import { EVENTS } from "@/lib/channels";
 import { itemExistsMessage, itemNameTaken } from "@/lib/duplicates";
 import { validateUpdateItem, withPriceUnitRule } from "@/lib/validators";
+import { serializeFolder } from "@/models/Folder";
 import { jsonError, readJson, serverError } from "@/lib/http";
 import { Item, DONE_BY_NAME, serializeItem, type ItemDoc } from "@/models/Item";
 
@@ -81,6 +82,9 @@ export async function DELETE(request: Request, ctx: Ctx): Promise<Response> {
     const { deletedCount } = await Item.deleteOne({ _id: itemId, folder: access.folder._id });
     if (deletedCount === 0) return jsonError(NOT_FOUND, 404);
     await publishFolderEvent(id, EVENTS.itemDeleted, { itemId }, getSocketId(request));
+    // Everything done → the list moves to "completed" (sent to everyone, me included).
+    const completed = await completeFolderIfAllDone(access.folder._id);
+    if (completed) await publishFolderEvent(id, EVENTS.folderUpdated, { folder: serializeFolder(completed) });
     await publishFolderProgress(access.folder._id);
     return new Response(null, { status: 204 });
   } catch (err) {

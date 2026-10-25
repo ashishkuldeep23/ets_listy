@@ -4,6 +4,8 @@ import { getFolderAccess } from "@/lib/access";
 import { validateToggle } from "@/lib/validators";
 import { getSocketId, publishFolderEvent, publishFolderProgress } from "@/lib/realtime";
 import { EVENTS } from "@/lib/channels";
+import { completeFolderIfAllDone } from "@/lib/items";
+import { serializeFolder } from "@/models/Folder";
 import { jsonError, readJson, serverError } from "@/lib/http";
 import { Item, DONE_BY_NAME, serializeItem, type ItemDoc } from "@/models/Item";
 
@@ -33,9 +35,13 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
     if (!mongoose.isValidObjectId(itemId)) return jsonError(NOT_FOUND, 404);
 
     // Record who ticked it and when; clear both when unticked.
-    const update = result.value.done
-      ? { $set: { done: true, doneBy: user.id, doneAt: new Date() }, $unset: { doneByGuest: "" } }
-      : { $set: { done: false }, $unset: { doneBy: "", doneByGuest: "", doneAt: "" } };
+    const { done, notFound } = result.value;
+    const update = done
+      ? {
+          $set: { done: true, doneBy: user.id, doneAt: new Date(), ...(notFound && { notFound: true }) },
+          $unset: { doneByGuest: "", ...(!notFound && { notFound: "" }) },
+        }
+      : { $set: { done: false }, $unset: { doneBy: "", doneByGuest: "", doneAt: "", notFound: "" } };
 
     // Filtering by folder too means an item from another folder is simply "not found".
     const item = await Item.findOneAndUpdate({ _id: itemId, folder: access.folder._id }, update, {
@@ -46,6 +52,9 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
     if (!item) return jsonError(NOT_FOUND, 404);
     const dto = serializeItem(item);
     await publishFolderEvent(id, EVENTS.itemUpdated, { item: dto }, getSocketId(request));
+    // Everything done → the list moves to "completed" (sent to everyone, me included).
+    const completed = await completeFolderIfAllDone(access.folder._id);
+    if (completed) await publishFolderEvent(id, EVENTS.folderUpdated, { folder: serializeFolder(completed) });
     await publishFolderProgress(access.folder._id);
     return Response.json(dto);
   } catch (err) {

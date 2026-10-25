@@ -23,6 +23,8 @@ export interface IItem {
   /** Ticked by someone with the share link who wasn't logged in. */
   doneByGuest?: boolean;
   doneAt?: Date;
+  /** Ticked off as "couldn't get it": done is true too, so it counts towards progress. */
+  notFound?: boolean;
   /** Sort order inside the folder (new items go last). */
   position: number;
   createdBy: Types.ObjectId;
@@ -44,6 +46,7 @@ const itemSchema = new mongoose.Schema<IItem>(
     doneBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     doneByGuest: { type: Boolean },
     doneAt: { type: Date },
+    notFound: { type: Boolean },
     position: { type: Number, required: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   },
@@ -88,6 +91,7 @@ export function serializeItem(item: ItemDoc): ItemDTO {
     done: item.done,
     doneBy: toUserRef(item.doneBy) ?? (item.done && item.doneByGuest ? GUEST_USER : null),
     doneAt: item.doneAt ?? null,
+    notFound: item.done && item.notFound === true,
     position: item.position,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,

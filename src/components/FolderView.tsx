@@ -306,23 +306,37 @@ export default function FolderView() {
       if (from === null && res.updated === 0) refetch();
     });
 
-  // Optimistic: flip the tick at once, then undo it if the server says no.
-  async function toggleItem(item: ItemDTO) {
-    const done = !item.done;
-    replaceItem({ ...item, done });
+  // The server moves the list to "completed" once every item is done; mirror
+  // it here so it shows at once, even without live updates.
+  function completeIfAllDone(next: ItemDTO[]) {
+    if (next.length === 0 || !next.every((i) => i.done)) return;
+    setFolder((prev) => (prev && prev.status !== "completed" ? { ...prev, status: "completed" } : prev));
+  }
+
+  // Optimistic: show the new state at once, then undo it if the server says no.
+  async function setItemDone(item: ItemDTO, done: boolean, notFound = false) {
+    replaceItem({ ...item, done, notFound });
     const ok = await run(async () => {
-      replaceItem(
-        await apiFetch<ItemDTO>(`${itemsUrl}/${item.id}/toggle`, { method: "POST", body: JSON.stringify({ done }) })
-      );
+      const updated = await apiFetch<ItemDTO>(`${itemsUrl}/${item.id}/toggle`, {
+        method: "POST",
+        body: JSON.stringify(notFound ? { done, notFound } : { done }),
+      });
+      replaceItem(updated);
+      completeIfAllDone(items.map((i) => (i.id === updated.id ? updated : i)));
     });
     if (!ok) replaceItem(item);
   }
+
+  // Ticking a "not found" item marks it found (done), not undone.
+  const toggleItem = (item: ItemDTO) => setItemDone(item, item.notFound || !item.done);
+  const toggleNotFound = (item: ItemDTO) => setItemDone(item, !item.notFound, !item.notFound);
 
   async function deleteItem(item: ItemDTO) {
     if (!confirm(`Delete "${item.name}"?`)) return;
     await run(async () => {
       await apiFetch(`${itemsUrl}/${item.id}`, { method: "DELETE" });
       setItems((prev) => prev.filter((i) => i.id !== item.id));
+      completeIfAllDone(items.filter((i) => i.id !== item.id));
     });
   }
 
@@ -448,6 +462,7 @@ export default function FolderView() {
                   canCheck={folder.canCheck}
                   canEdit={folder.canEdit}
                   onToggle={() => toggleItem(item)}
+                  onToggleNotFound={() => toggleNotFound(item)}
                   onSave={(values) => saveItem(item, values)}
                   onDelete={() => deleteItem(item)}
                   onSaveToProfile={() => saveToProfile(item)}

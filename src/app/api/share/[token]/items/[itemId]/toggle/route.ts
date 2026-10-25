@@ -4,6 +4,8 @@ import { getClientIp, rateLimit } from "@/lib/rateLimit";
 import { validateToggle } from "@/lib/validators";
 import { publishFolderEvent, publishFolderProgress } from "@/lib/realtime";
 import { EVENTS } from "@/lib/channels";
+import { completeFolderIfAllDone } from "@/lib/items";
+import { serializeFolder } from "@/models/Folder";
 import { jsonError, readJson, serverError, tooManyRequests } from "@/lib/http";
 import { Item, DONE_BY_NAME, serializeItem, type ItemDoc } from "@/models/Item";
 import { ShareLink, isShareTokenShape } from "@/models/ShareLink";
@@ -39,9 +41,13 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
 
     if (!mongoose.isValidObjectId(itemId)) return jsonError("Item not found", 404);
 
-    const update = result.value.done
-      ? { $set: { done: true, doneByGuest: true, doneAt: new Date() }, $unset: { doneBy: "" } }
-      : { $set: { done: false }, $unset: { doneBy: "", doneByGuest: "", doneAt: "" } };
+    const { done, notFound } = result.value;
+    const update = done
+      ? {
+          $set: { done: true, doneByGuest: true, doneAt: new Date(), ...(notFound && { notFound: true }) },
+          $unset: { doneBy: "", ...(!notFound && { notFound: "" }) },
+        }
+      : { $set: { done: false }, $unset: { doneBy: "", doneByGuest: "", doneAt: "", notFound: "" } };
     // Filtering by the link's folder means items of other lists are "not found".
     const item = await Item.findOneAndUpdate({ _id: itemId, folder: link.folder }, update, { returnDocument: "after" })
       .populate(DONE_BY_NAME)
@@ -50,6 +56,9 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
 
     // Live: the owner's (and shared users') open screens update via Pusher.
     await publishFolderEvent(String(link.folder), EVENTS.itemUpdated, { item: serializeItem(item) });
+    // Everything done → the list moves to "completed" (sent to everyone, me included).
+    const completed = await completeFolderIfAllDone(link.folder);
+    if (completed) await publishFolderEvent(String(link.folder), EVENTS.folderUpdated, { folder: serializeFolder(completed) });
     await publishFolderProgress(link.folder);
     // Guests never see names, same as the public view.
     return Response.json({ ...serializeItem(item), doneBy: null }, { headers: { "Cache-Control": "no-store" } });

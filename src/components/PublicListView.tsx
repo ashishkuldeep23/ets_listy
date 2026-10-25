@@ -83,19 +83,21 @@ export default function PublicListView({ token }: { token: string }) {
   const refreshNow = useCallback(() => void load().catch(() => {}), [load]);
 
   // Optimistic tick; undone if the server says no.
-  async function toggle(item: ItemDTO) {
+  // Ticking a "not found" item marks it found (done), not undone.
+  async function toggle(item: ItemDTO, markNotFound = false) {
     if (pending.includes(item.id)) return;
-    const done = !item.done;
+    const notFound = markNotFound && !item.notFound;
+    const done = markNotFound ? notFound : item.notFound || !item.done;
     const put = (next: ItemDTO) =>
       setData((d) => (d ? { ...d, items: d.items.map((i) => (i.id === next.id ? next : i)) } : d));
     setToggleError("");
     setPending((p) => [...p, item.id]);
-    put({ ...item, done });
+    put({ ...item, done, notFound });
     try {
       put(
         await apiFetch<ItemDTO>(`${base}/items/${encodeURIComponent(item.id)}/toggle`, {
           method: "POST",
-          body: JSON.stringify({ done }),
+          body: JSON.stringify(notFound ? { done, notFound } : { done }),
         })
       );
     } catch (err) {
@@ -200,6 +202,7 @@ export default function PublicListView({ token }: { token: string }) {
                   canCheck={canCheck && !pending.includes(item.id)}
                   canEdit={false}
                   onToggle={() => void toggle(item)}
+                  onToggleNotFound={() => void toggle(item, true)}
                   onSave={cannotRename}
                   onDelete={noop}
                 />

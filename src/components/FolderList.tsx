@@ -99,6 +99,8 @@ export default function FolderList() {
       [EVENTS.folderProgress]: (data) => {
         const p = data as FolderProgressEvent;
         if (p.deleted) return refresh(); // card gone, counts change
+        // All done: the server moved it to "completed", so its badge, filter and tab counts change.
+        if (p.itemCount > 0 && p.doneCount === p.itemCount) return refresh();
         setFolders((prev) =>
           prev.map((f) => (f.id === p.folderId ? { ...f, itemCount: p.itemCount, doneCount: p.doneCount } : f))
         );

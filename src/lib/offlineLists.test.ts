@@ -45,6 +45,7 @@ const item = (id: string, done = false): ItemDTO => ({
   done,
   doneBy: done ? { id: "u1", name: "Asha" } : null,
   doneAt: null,
+  notFound: false,
   position: 0,
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",

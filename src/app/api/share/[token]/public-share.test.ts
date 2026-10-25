@@ -48,7 +48,8 @@ describe("public share view", () => {
     expect(res.headers.get("cache-control")).toBe("no-store");
 
     const body = await json<PublicShareResponse>(res);
-    expect(body.list).toEqual({ name: "Market", status: "active" });
+    // Its only item is ticked in setup(), so the list moved to "completed" on its own.
+    expect(body.list).toEqual({ name: "Market", status: "completed" });
     expect(body.items).toHaveLength(1);
     expect(body.items[0]).toMatchObject({ name: "Milk", price: 60, done: true });
   });

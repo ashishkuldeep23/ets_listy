@@ -129,6 +129,8 @@ export interface ItemDTO {
   done: boolean;
   doneBy: UserRef | null;
   doneAt: string | Date | null;
+  /** Marked "not found" (done is true too, so it counts as done). */
+  notFound: boolean;
   position: number;
   createdAt: string | Date;
   updatedAt: string | Date;

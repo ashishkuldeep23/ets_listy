@@ -274,10 +274,19 @@ export function validateUpdateItem(body: unknown): Result<ItemFieldsInput> {
   return { ok: true, value };
 }
 
-/** Body for POST /api/folders/:id/items/:itemId/toggle: { done: boolean }. */
-export function validateToggle(body: unknown): Result<{ done: boolean }> {
+export interface ToggleInput {
+  done: boolean;
+  /** Ticked off as "not found" (couldn't get it). Still counts as done. */
+  notFound: boolean;
+}
+
+/** Body for the toggle routes: { done: boolean, notFound?: boolean }. notFound needs done: true. */
+export function validateToggle(body: unknown): Result<ToggleInput> {
   if (!isPlainObject(body) || typeof body.done !== "boolean") return fail("done must be true or false");
-  return { ok: true, value: { done: body.done } };
+  if (body.notFound !== undefined && typeof body.notFound !== "boolean") return fail("notFound must be true or false");
+  const notFound = body.notFound === true;
+  if (notFound && !body.done) return fail("a not-found item must be done");
+  return { ok: true, value: { done: body.done, notFound } };
 }
 
 export interface RenameGroupInput {

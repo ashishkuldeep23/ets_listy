@@ -39,7 +39,7 @@ export function statusFilter(status: FolderStatus) {
 }
 
 /** A folder document as read from the DB (lean or hydrated). */
-type FolderDoc = IFolder & { _id: Types.ObjectId };
+export type FolderDoc = IFolder & { _id: Types.ObjectId };
 
 /** The shape the API sends to clients: no internal fields, `id` instead of `_id`. */
 export function serializeFolder(folder: FolderDoc): FolderDTO {

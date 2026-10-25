@@ -1,5 +1,6 @@
 import type { Types } from "mongoose";
 import { Item } from "@/models/Item";
+import { Folder, type FolderDoc } from "@/models/Folder";
 import { CASE_INSENSITIVE } from "@/lib/duplicates";
 import type { ItemFieldsInput } from "@/lib/validators";
 
@@ -70,4 +71,19 @@ export async function countItemsByFolder(
     },
   ]);
   return new Map(rows.map((r) => [String(r._id), { itemCount: r.itemCount, doneCount: r.doneCount }]));
+}
+
+/**
+ * Moves the folder to "completed" once every item is done (ticked or not
+ * found). Returns the updated folder, or null when nothing changed (not all
+ * done, empty, or already completed), so callers publish only real changes.
+ */
+export async function completeFolderIfAllDone(folderId: Types.ObjectId): Promise<FolderDoc | null> {
+  const { total, done } = await countItems(folderId);
+  if (total === 0 || done < total) return null;
+  return Folder.findOneAndUpdate(
+    { _id: folderId, status: { $ne: "completed" } },
+    { $set: { status: "completed" } },
+    { returnDocument: "after" }
+  ).lean<FolderDoc>();
 }

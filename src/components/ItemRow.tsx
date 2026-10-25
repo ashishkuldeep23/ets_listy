@@ -1,10 +1,10 @@
 "use client";
 
-// One item in a folder: tick box, details, edit / delete, and a bookmark
-// to save it to my profile (e.g. from a list someone shared with me).
+// One item in a folder: "not found" mark, tick box, details, edit / delete,
+// and a bookmark to save it to my profile (e.g. from a list someone shared with me).
 
 import { useState } from "react";
-import { Bookmark, BookmarkCheck, Check, LoaderCircle, Pencil, Tag, Trash2, UserCheck } from "lucide-react";
+import { Bookmark, BookmarkCheck, Check, LoaderCircle, PackageX, Pencil, Tag, Trash2, UserCheck, X } from "lucide-react";
 import ItemForm, { type ItemFormValues } from "@/components/ItemForm";
 import { formatPriceLine } from "@/lib/format";
 import { lineTotal } from "@/lib/totals";
@@ -17,6 +17,8 @@ interface ItemRowProps {
   canCheck: boolean;
   canEdit: boolean;
   onToggle: () => void;
+  /** Shows the red "not found" mark (counts as done). Left out where it can't be sent, e.g. offline. */
+  onToggleNotFound?: () => void;
   onSave: (values: ItemFormValues) => Promise<boolean>;
   onDelete: () => void;
   /** Shows the "Save to my profile" bookmark. Return true when saved. */
@@ -31,6 +33,7 @@ export default function ItemRow({
   canCheck,
   canEdit,
   onToggle,
+  onToggleNotFound,
   onSave,
   onDelete,
   onSaveToProfile,
@@ -67,11 +70,31 @@ export default function ItemRow({
 
   return (
     <li className="card flex animate-fade-up items-start gap-3 py-3">
+      {/* "Couldn't get it": a red cross, also a real checkbox. It counts as done so nothing is left hanging. */}
+      {onToggleNotFound && (
+        <span className="relative mt-0.5 flex size-5 shrink-0 items-center justify-center">
+          <input
+            type="checkbox"
+            checked={item.notFound}
+            onChange={onToggleNotFound}
+            disabled={!canCheck}
+            title={item.notFound ? "Not found (tap to undo)" : "Mark as not found"}
+            aria-label={`Mark ${item.name} as ${item.notFound ? "not marked" : "not found"}`}
+            className="peer size-5 cursor-pointer appearance-none rounded-full border-2 border-danger/50 transition-colors outline-none checked:border-danger checked:bg-danger hover:border-danger focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-60"
+          />
+          <X
+            className="pointer-events-none absolute size-3.5 scale-0 text-bg transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] peer-checked:scale-100"
+            strokeWidth={3}
+            aria-hidden
+          />
+        </span>
+      )}
+
       {/* A real checkbox (keyboard + screen readers), drawn as a round golden tick that pops in. */}
       <span className="relative mt-0.5 flex size-5 shrink-0 items-center justify-center">
         <input
           type="checkbox"
-          checked={item.done}
+          checked={item.done && !item.notFound}
           onChange={onToggle}
           disabled={!canCheck}
           aria-label={`Mark ${item.name} as ${item.done ? "not done" : "done"}`}
@@ -86,7 +109,19 @@ export default function ItemRow({
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <span className={`wrap-break-word transition-colors ${item.done ? "text-muted line-through" : ""}`}>{item.name}</span>
+          <span
+            className={`wrap-break-word transition-colors ${
+              item.notFound ? "text-danger line-through decoration-2" : item.done ? "text-muted line-through" : ""
+            }`}
+          >
+            {item.name}
+          </span>
+          {item.notFound && (
+            <span className="inline-flex animate-pop items-center gap-1 rounded-full border border-danger/50 px-2 py-0.5 text-xs text-danger">
+              <PackageX className="size-3" aria-hidden />
+              Not found
+            </span>
+          )}
           {item.category && (
             <span className="inline-flex items-center gap-1 rounded-full border border-accent/40 px-2 py-0.5 text-xs text-accent">
               <Tag className="size-3" aria-hidden />
@@ -101,7 +136,7 @@ export default function ItemRow({
         {item.done && item.doneBy && (
           <p className="mt-1 flex animate-fade-up items-center gap-1 text-xs text-accent">
             <UserCheck className="size-3.5" aria-hidden />
-            by {item.doneBy.name}
+            {item.notFound ? "marked by" : "by"} {item.doneBy.name}
           </p>
         )}
       </div>

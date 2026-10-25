@@ -8,6 +8,7 @@ import { PATCH as updateItem, DELETE as deleteItem } from "@/app/api/folders/[id
 import { POST as toggleItem } from "@/app/api/folders/[id]/items/[itemId]/toggle/route";
 import { LIMITS } from "@/lib/limits";
 import { Item } from "@/models/Item";
+import { Folder } from "@/models/Folder";
 import type { FolderDTO, FolderListResponse, ItemDTO, ItemListResponse } from "@/types";
 
 setupTestDb();
@@ -29,6 +30,11 @@ const items = {
   toggle: (cookie: string, folderId: string, itemId: string, done: unknown) =>
     toggleItem(
       makeRequest(`/api/folders/${folderId}/items/${itemId}/toggle`, { method: "POST", body: { done }, cookie }),
+      routeCtx({ id: folderId, itemId })
+    ),
+  notFound: (cookie: string, folderId: string, itemId: string, notFound: unknown, done: unknown = true) =>
+    toggleItem(
+      makeRequest(`/api/folders/${folderId}/items/${itemId}/toggle`, { method: "POST", body: { done, notFound }, cookie }),
       routeCtx({ id: folderId, itemId })
     ),
   remove: (cookie: string, folderId: string, itemId: string) =>
@@ -96,6 +102,48 @@ describe("items API", () => {
     expect(unticked).toMatchObject({ done: false, doneBy: null, doneAt: null });
 
     expect((await items.toggle(cookie, folder.id, milk.id, "yes")).status).toBe(400);
+  });
+
+  it("marks an item not found (counts as done), and a normal tick or untick clears it", async () => {
+    const { cookie } = await createUserAndCookie({ name: "Asha" });
+    const folder = await newFolder(cookie);
+    const milk = await json<ItemDTO>(await items.create(cookie, folder.id, { name: "Milk" }));
+    expect(milk.notFound).toBe(false);
+
+    const missing = await json<ItemDTO>(await items.notFound(cookie, folder.id, milk.id, true));
+    expect(missing).toMatchObject({ done: true, notFound: true, doneBy: { name: "Asha" } });
+    expect(await json<ItemListResponse>(await items.list(cookie, folder.id))).toMatchObject({ total: 1, done: 1 });
+
+    expect(await json<ItemDTO>(await items.toggle(cookie, folder.id, milk.id, true))).toMatchObject({ done: true, notFound: false });
+    await items.notFound(cookie, folder.id, milk.id, true);
+    expect(await json<ItemDTO>(await items.toggle(cookie, folder.id, milk.id, false))).toMatchObject({ done: false, notFound: false });
+
+    expect((await items.notFound(cookie, folder.id, milk.id, true, false)).status).toBe(400);
+    expect((await items.notFound(cookie, folder.id, milk.id, { $ne: false })).status).toBe(400);
+  });
+
+  it("moves the list to completed once every item is done or not found", async () => {
+    const { cookie } = await createUserAndCookie();
+    const folder = await newFolder(cookie);
+    const milk = await json<ItemDTO>(await items.create(cookie, folder.id, { name: "Milk" }));
+    const bread = await json<ItemDTO>(await items.create(cookie, folder.id, { name: "Bread" }));
+    const status = async () => (await Folder.findById(folder.id).lean())?.status;
+
+    await items.toggle(cookie, folder.id, milk.id, true);
+    expect(await status()).toBe("active");
+    await items.notFound(cookie, folder.id, bread.id, true);
+    expect(await status()).toBe("completed");
+  });
+
+  it("moves the list to completed when the last undone item is deleted", async () => {
+    const { cookie } = await createUserAndCookie();
+    const folder = await newFolder(cookie);
+    const milk = await json<ItemDTO>(await items.create(cookie, folder.id, { name: "Milk" }));
+    const bread = await json<ItemDTO>(await items.create(cookie, folder.id, { name: "Bread" }));
+    await items.toggle(cookie, folder.id, milk.id, true);
+
+    await items.remove(cookie, folder.id, bread.id);
+    expect((await Folder.findById(folder.id).lean())?.status).toBe("completed");
   });
 
   it("deletes an item", async () => {

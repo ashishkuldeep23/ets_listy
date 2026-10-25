@@ -160,8 +160,15 @@ describe("item validators", () => {
   });
 
   it("toggle needs a real boolean", () => {
-    expect(validateToggle({ done: true })).toEqual({ ok: true, value: { done: true } });
+    expect(validateToggle({ done: true })).toEqual({ ok: true, value: { done: true, notFound: false } });
     for (const done of ["true", 1, null, undefined]) expect(validateToggle({ done }).ok).toBe(false);
+  });
+
+  it("toggle accepts notFound only as a boolean, and only with done: true", () => {
+    expect(validateToggle({ done: true, notFound: true })).toEqual({ ok: true, value: { done: true, notFound: true } });
+    expect(validateToggle({ done: false, notFound: false })).toEqual({ ok: true, value: { done: false, notFound: false } });
+    expect(validateToggle({ done: false, notFound: true }).ok).toBe(false);
+    for (const notFound of ["true", 1, null, { $ne: false }]) expect(validateToggle({ done: true, notFound }).ok).toBe(false);
   });
 });
 
