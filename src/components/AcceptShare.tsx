@@ -15,7 +15,9 @@ import OfflineListView from "@/components/OfflineListView";
 import PublicListView from "@/components/PublicListView";
 import { useOnline } from "@/hooks/useOnline";
 import { ApiError, apiFetch } from "@/lib/apiClient";
+import { useOfflineVersion } from "@/hooks/useOfflineVersion";
 import { getOfflineList } from "@/lib/offlineLists";
+import { whenOfflineReady } from "@/lib/offlineStore";
 import type { AcceptShareResponse } from "@/types";
 
 export default function AcceptShare() {
@@ -26,6 +28,8 @@ export default function AcceptShare() {
   // The request failed for lack of network and a saved copy exists.
   const [offline, setOffline] = useState(false);
   const online = useOnline();
+  // Re-render once the offline store has been read (it may hold a copy of this list).
+  const offlineReady = useOfflineVersion() >= 0;
   const path = `/share/${token}`;
   // Bumped to try again while the offline copy is showing.
   const [attempt, setAttempt] = useState(0);
@@ -37,7 +41,8 @@ export default function AcceptShare() {
     let cancelled = false;
     apiFetch<AcceptShareResponse>(`/api/share/${encodeURIComponent(token)}/accept`, { method: "POST" })
       .then(({ folderId }) => !cancelled && router.replace(`/folders/${folderId}`))
-      .catch((err: unknown) => {
+      .catch(async (err: unknown) => {
+        await whenOfflineReady();
         if (cancelled) return;
         setOffline(false);
         if (err instanceof ApiError && err.status === 401) {
@@ -55,7 +60,7 @@ export default function AcceptShare() {
     };
   }, [token, router, online, path, attempt]);
 
-  if (offline || (!online && getOfflineList(path))) return <OfflineListView path={path} onRetry={retry} />;
+  if (offline || (!online && offlineReady && getOfflineList(path))) return <OfflineListView path={path} onRetry={retry} />;
   if (guest) return <PublicListView token={token} />;
   if (!online && !error) return <OfflineError />;
   if (!error) return <Loading label="Opening shared list…" />;

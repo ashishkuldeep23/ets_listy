@@ -35,6 +35,25 @@ Sirf phase me divide kro aur prompts folder me phase vise features banane ke liy
 
 
 
+Mai soch raha hu offline features ko extend krne ko, jish se ki user ish app me nayi lish bana sake, list me item add kr sake, item related feature ko use kr sake jaise delete edit and make done or not found.
+Aur bhi jo tumhe lagta hai ish appp ko analyise krke jo bhi offline feature hona chahiye usko bhi include develope kro, phle mujhe uno list dikho phir mai bata at hu kon sa bana na hai.
+
+
+
+
+
+aur ek chij fix kro jb bhi user kisi bhi item name pr click kre to user completed ka mark kr do, abhi sirf checklist pr click krne se hota hai ab dono se hona chahiye.
+
+
+
+------------------------------------------------>>>>>>>>>>>>>>>>>
+
+
+
+
+
+
+
 
 
 

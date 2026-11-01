@@ -1,63 +1,55 @@
 "use client";
 
 // "Save offline" on a list page (logged in or guest). Keeps a copy of the
-// list on this device so the page still opens and can be ticked with no
-// internet. While saved, the copy follows every change seen online, and
-// ticks made offline are sent to the server (then `onSynced` reloads the
-// list). Click again to remove the copy.
+// list on this device so the page still opens and can be used with no
+// internet (OfflineListView). While saved, the copy follows every change
+// seen online. Changes made offline are sent by OfflineStatus (in the
+// header); `onSynced` then reloads the list. Click again to remove the copy.
+// With "Keep all lists offline" on, my lists are always kept: the button
+// then only says so (turn the setting off on the home page to choose).
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { CloudCheck, Download, LoaderCircle } from "lucide-react";
+import { useOfflineVersion } from "@/hooks/useOfflineVersion";
+import { isAutoSaveOn } from "@/lib/offlineAuto";
 import { getOfflineList, removeOfflineList, saveOfflineList, type OfflineSnapshot } from "@/lib/offlineLists";
-import { cachePageForOffline, hasTicksToSync, syncOfflineTicks, uncachePage } from "@/lib/offlineSync";
-
-const SYNC_RETRY_MS = 15_000;
+import { cachePageForOffline, OFFLINE_SYNCED_EVENT, uncachePage, type OfflineSyncedDetail } from "@/lib/offlineSync";
 
 interface SaveOfflineButtonProps extends OfflineSnapshot {
-  /** Called after offline ticks reached the server, to reload the list. */
+  /** Called after offline changes reached the server, to reload the list. */
   onSynced: () => void;
 }
 
-export default function SaveOfflineButton({ path, name, status, items, toggleBase, onSynced }: SaveOfflineButtonProps) {
-  // Only rendered after the list loaded in the browser, so reading storage here is safe.
-  const [saved, setSaved] = useState(() => getOfflineList(path) !== null);
+export default function SaveOfflineButton({ path, name, status, items, toggleBase, canEdit, onSynced }: SaveOfflineButtonProps) {
+  // Read from the offline store on every change to it (nothing until it has been read).
+  const ready = useOfflineVersion() >= 0;
+  // Share links aren't "my lists": those are always saved by hand.
+  const auto = ready && path.startsWith("/folders/") && isAutoSaveOn();
+  const saved = ready && (auto || getOfflineList(path) !== null);
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  const syncing = useRef(false);
 
   useEffect(() => {
-    if (saved) saveOfflineList({ path, name, status, items, toggleBase });
-  }, [saved, path, name, status, items, toggleBase]);
+    // A copy made here because of the setting counts as an automatic one.
+    if (saved) saveOfflineList({ path, name, status, items, toggleBase, canEdit, ...(!getOfflineList(path) && { auto }) });
+  }, [saved, auto, path, name, status, items, toggleBase, canEdit]);
 
   // Re-save the page itself once per visit: the browser may have evicted it,
   // or it was saved by an older version of the app that kept less.
-  const savedOnMount = useRef(saved);
+  const pageCached = useRef(false);
   useEffect(() => {
-    if (savedOnMount.current && navigator.onLine) {
-      cachePageForOffline(path).catch((err: unknown) => console.error("Offline page cache failed", err));
-    }
-  }, [path]);
+    if (!saved || pageCached.current || !navigator.onLine) return;
+    pageCached.current = true;
+    cachePageForOffline(path).catch((err: unknown) => console.error("Offline page cache failed", err));
+  }, [saved, path]);
 
-  // Send offline ticks now, when the connection returns, and on a timer
-  // (a request right after "online" can still fail, or hang on a weak signal).
   useEffect(() => {
-    const sync = () => {
-      if (syncing.current || !navigator.onLine || !hasTicksToSync(path)) return;
-      syncing.current = true;
-      syncOfflineTicks(path)
-        .then((changed) => changed && onSynced())
-        .finally(() => {
-          syncing.current = false;
-        });
+    const onSync = (e: Event) => {
+      if (e instanceof CustomEvent && (e.detail as OfflineSyncedDetail).path === path) onSynced();
     };
-    sync();
-    const timer = setInterval(sync, SYNC_RETRY_MS);
-    window.addEventListener("online", sync);
-    return () => {
-      clearInterval(timer);
-      window.removeEventListener("online", sync);
-    };
+    window.addEventListener(OFFLINE_SYNCED_EVENT, onSync);
+    return () => window.removeEventListener(OFFLINE_SYNCED_EVENT, onSync);
   }, [path, onSynced]);
 
   async function toggle() {
@@ -65,26 +57,34 @@ export default function SaveOfflineButton({ path, name, status, items, toggleBas
     if (saved) {
       removeOfflineList(path);
       await uncachePage(path).catch(() => {});
-      setSaved(false);
     } else {
-      saveOfflineList({ path, name, status, items, toggleBase });
+      pageCached.current = true;
+      saveOfflineList({ path, name, status, items, toggleBase, canEdit, auto: false });
       // Without the page cache the list still shows offline in an open tab, just not after a reload.
       await cachePageForOffline(path).catch((err: unknown) => console.error("Offline page cache failed", err));
       // Re-request the page's data now that it is saved, so the service worker keeps a full copy of it.
       router.refresh();
-      setSaved(true);
     }
     setBusy(false);
   }
 
   const label = saved ? "Saved offline" : "Save offline";
+  if (auto) {
+    return (
+      <span className="btn-secondary cursor-default text-sm" title='All your lists are kept offline ("Keep all lists offline" on the home page).'>
+        <CloudCheck className="size-4" aria-hidden />
+        <span className="hidden sm:inline">{label}</span>
+        <span className="sr-only sm:hidden">{label}</span>
+      </span>
+    );
+  }
   return (
     <button
       onClick={toggle}
       disabled={busy}
       aria-pressed={saved}
       className={`${saved ? "btn-secondary" : "btn-ghost"} text-sm`}
-      title={saved ? "Available without internet. Click to remove the offline copy." : "Keep a copy on this device to view and tick without internet"}
+      title={saved ? "Available without internet. Click to remove the offline copy." : "Keep a copy on this device to use without internet"}
     >
       {busy ? (
         <LoaderCircle className="size-4 animate-spin" aria-hidden />

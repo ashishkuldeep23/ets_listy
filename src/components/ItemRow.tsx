@@ -2,8 +2,9 @@
 
 // One item in a folder: "not found" mark, tick box, details, edit / delete,
 // and a bookmark to save it to my profile (e.g. from a list someone shared with me).
+// Tapping the item's name ticks it too (it is the tick box's label).
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
    Bookmark,
    BookmarkCheck,
@@ -28,7 +29,7 @@ interface ItemRowProps {
    canCheck: boolean;
    canEdit: boolean;
    onToggle: () => void;
-   /** Shows the red "not found" mark (counts as done). Left out where it can't be sent, e.g. offline. */
+   /** Shows the red "not found" mark (counts as done). Left out where it can't be sent. */
    onToggleNotFound?: () => void;
    onSave: (values: ItemFormValues) => Promise<boolean>;
    onDelete: () => void;
@@ -51,6 +52,7 @@ export default function ItemRow({
    saved = false,
 }: ItemRowProps) {
    const [editing, setEditing] = useState(false);
+   const checkboxId = useId();
    const [saving, setSaving] = useState(false);
 
    async function saveToProfile() {
@@ -84,6 +86,7 @@ export default function ItemRow({
          {/* A real checkbox (keyboard + screen readers), drawn as a round golden tick that pops in. */}
          <span className="relative mt-0.5 flex size-5 shrink-0 items-center justify-center">
             <input
+               id={checkboxId}
                type="checkbox"
                checked={item.done && !item.notFound}
                onChange={onToggle}
@@ -100,8 +103,10 @@ export default function ItemRow({
 
          <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-               <span
-                  className={`wrap-break-word transition-colors ${
+               {/* A label, so a tap on the name works the tick box (and does nothing when it is disabled). */}
+               <label
+                  htmlFor={checkboxId}
+                  className={`wrap-break-word transition-colors ${canCheck ? "cursor-pointer select-none" : ""} ${
                      item.notFound
                         ? "text-danger line-through decoration-2"
                         : item.done
@@ -109,7 +114,7 @@ export default function ItemRow({
                           : ""
                   }`}>
                   {item.name}
-               </span>
+               </label>
                {item.notFound && (
                   <span className="inline-flex animate-pop items-center gap-1 rounded-full border border-danger/50 px-2 py-0.5 text-xs text-danger">
                      <PackageX className="size-3" aria-hidden />

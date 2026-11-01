@@ -48,7 +48,9 @@ import { useSavedItems } from "@/hooks/useSavedItems";
 import { ApiError, apiFetch } from "@/lib/apiClient";
 import { EVENTS, folderChannel } from "@/lib/channels";
 import { formatRupees } from "@/lib/format";
+import { useOfflineVersion } from "@/hooks/useOfflineVersion";
 import { getOfflineList } from "@/lib/offlineLists";
+import { whenOfflineReady } from "@/lib/offlineStore";
 import { computeTotals, groupItems } from "@/lib/totals";
 import type {
   FolderDTO,
@@ -88,6 +90,8 @@ export default function FolderView() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const online = useOnline();
+  // Re-render once the offline store has been read (it may hold a copy of this list).
+  const offlineReady = useOfflineVersion() >= 0;
   const path = `/folders/${id}`;
   // Bumped to load again while the offline copy is showing.
   const [attempt, setAttempt] = useState(0);
@@ -124,7 +128,8 @@ export default function FolderView() {
         setItems(list.items);
         setState("ready");
       })
-      .catch((err: unknown) => {
+      .catch(async (err: unknown) => {
+        await whenOfflineReady();
         if (cancelled) return;
         if (err instanceof ApiError) setState(err.status === 404 ? "notFound" : "error");
         else setState(getOfflineList(path) ? "offline" : "error");
@@ -202,7 +207,7 @@ export default function FolderView() {
     );
   }
 
-  if (state === "offline" || (!online && getOfflineList(path))) return <OfflineListView path={path} onRetry={retry} />;
+  if (state === "offline" || (!online && offlineReady && getOfflineList(path))) return <OfflineListView path={path} onRetry={retry} />;
   // Offline with no saved copy: nothing will load, say so instead of spinning.
   if (state === "loading" && online) return <Loading />;
 
@@ -372,6 +377,7 @@ export default function FolderView() {
             status={folder.status}
             items={items}
             toggleBase={folder.canCheck ? itemsUrl : null}
+            canEdit={folder.canEdit}
             onSynced={refetch}
           />
           {folder.canManage && !showShare && (

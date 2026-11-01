@@ -2,9 +2,12 @@
 
 // Loads my saved items, re-searching (with a short delay) as `query` changes.
 // Shared by the "Add from saved" panel and the profile page.
+// Offline: searches the copy kept from the last full load instead.
 
 import { useCallback, useEffect, useState } from "react";
-import { apiFetch } from "@/lib/apiClient";
+import { ApiError, apiFetch } from "@/lib/apiClient";
+import { getCachedSavedItems, saveCachedSavedItems } from "@/lib/offlineHome";
+import { whenOfflineReady } from "@/lib/offlineStore";
 import type { SavedItemDTO, SavedItemListResponse } from "@/types";
 
 const SEARCH_DELAY_MS = 250;
@@ -14,10 +17,19 @@ export function useSavedItems(query: string) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const fetchList = useCallback(
-    () => apiFetch<SavedItemListResponse>(`/api/saved-items?q=${encodeURIComponent(query.trim())}`),
-    [query]
-  );
+  const fetchList = useCallback(async () => {
+    try {
+      const data = await apiFetch<SavedItemListResponse>(`/api/saved-items?q=${encodeURIComponent(query.trim())}`);
+      if (!query.trim()) saveCachedSavedItems(data.savedItems);
+      return data;
+    } catch (err) {
+      // No network (not a refusal from the server): use the kept copy, if there is one.
+      if (!(err instanceof ApiError)) await whenOfflineReady();
+      const cached = err instanceof ApiError ? null : getCachedSavedItems(query);
+      if (!cached) throw err;
+      return { savedItems: cached };
+    }
+  }, [query]);
 
   useEffect(() => {
     let cancelled = false;

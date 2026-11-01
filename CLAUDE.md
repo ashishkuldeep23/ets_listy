@@ -35,6 +35,11 @@ Setup: copy `.env.example` to `.env.local` and set `MONGODB_URI` and
 `SESSION_SECRET`. The four Pusher vars are optional: without them the app
 works with no live updates.
 
+Offline: `public/sw.js` (service worker, production only) caches pages and,
+via `public/sw-sync.js`, sends offline changes with Background Sync when no
+tab is open. `sw-sync.js` is plain JS that repeats `syncAllOffline()` in
+`src/lib/offlineSync.ts`: change both together (tests: `src/lib/swSync.test.ts`).
+
 Feature prompts for upcoming work live in `prompts/` (start with
 `prompts/README.md` and `prompts/_common.md`).
 
@@ -45,6 +50,7 @@ src/
   types.ts                   # shared API types: SessionUser, FolderDTO, Result<T>, …
   proxy.ts                   # Next 16 "proxy" (was middleware): page redirects for login
   app/
+    manifest.ts              # PWA manifest (icons in public/icons/); public/sw.js makes it work offline
     page.tsx                 # home page
     login/, signup/          # auth pages (use components/AuthForm.tsx)
     folders/[id]/page.tsx    # one folder (components/FolderView.tsx)
@@ -79,7 +85,8 @@ src/
     ChatToasts.tsx           # toasts for new messages in my lists, except on that list's own page
     ViewersButton.tsx        # "N viewing" pill; tap → who is here (name + email for members, guests "Anonymous")
     AuthForm.tsx             # shared login/signup form
-    FolderList.tsx           # home: tabs My folders / Shared with me (?tab=shared), status chips
+    FolderList.tsx           # home: tabs My folders / Shared with me (?tab=shared), status chips, "Keep all lists offline";
+                             #   offline: cached cards, new lists, rename/status/delete queued, ?list= opens a copy in place
     FolderView.tsx           # folder page body
     StatusBadge.tsx          # folder status label + icon (STATUS_ICONS, one per status)
     ErrorText.tsx            # red error line with alert icon (use for every error message)
@@ -95,8 +102,12 @@ src/
     AcceptShare.tsx          # /share/[token] body (join, or read-only view for guests)
     PublicListView.tsx       # guest read-only list + Log in / Sign up prompt
     LiveDot.tsx              # header "Live" indicator (hidden if Pusher is off)
-    SaveOfflineButton.tsx    # "Save offline" on a list (folder + share page); keeps the copy fresh, syncs offline ticks
-    OfflineListView.tsx      # list page with no internet: saved copy, local ticks, auto-retry
+    SaveOfflineButton.tsx    # "Save offline" on a list (folder + share page); keeps the copy fresh, reloads after a sync;
+                             #   just a label while "Keep all lists offline" is on
+    OfflineListView.tsx      # a list with no internet (saved copy or made offline): add (also from saved), edit, delete,
+                             #   tick, not found, rename group; auto-retry
+    InstallButton.tsx        # header "Install app" (only when the browser offers it; manifest in app/manifest.ts)
+    OfflineStatus.tsx        # header pill: offline changes waiting + sync problems; runs the sync (all pages)
     ServiceWorker.tsx        # registers public/sw.js (production only)
     ProfileView.tsx          # profile: avatar, Edit profile dialog (name; email locked), Shared lists, saved items
   hooks/
@@ -105,6 +116,7 @@ src/
     useMe.ts                 # current user (fetched per mount, no cache)
     usePresence.ts           # heartbeat + who has a list open, shared by ViewersButton and ListChat
     useOnline.ts             # navigator.onLine as a hook (a hint only; a failed fetch also means offline)
+    useOfflineVersion.ts     # re-render when offline data in localStorage changes (-1 on the server)
   lib/
     db.ts          # cached Mongoose connection: always use connectDB()
     session.ts     # sign/verify session JWT (jose); no DB, used by proxy.ts
@@ -124,8 +136,15 @@ src/
     savedItems.ts  # upsertSavedItem() (no duplicates, limit), updateSavedItem(), escapeRegex()
     duplicates.ts  # folderNameTaken() / itemNameTaken(): case-insensitive, routes answer 409
     rateLimit.ts   # in-memory rate limiter (per process only)
-    offlineLists.ts # "Save offline" copies in localStorage (by page path) + offline ticks; cleared on logout
-    offlineSync.ts # browser only: page cache for public/sw.js, sends offline ticks when back online
+    offlineStore.ts # where offline data lives: IndexedDB (readable by the service worker) with a sync in-memory
+                   #   copy + BroadcastChannel between tabs; localStorage fallback; moves old localStorage data once
+    offlineLists.ts # offline copies in the offline store (by page path, or new:<id> for lists made offline) +
+                   #   their offline changes, sync problems, claimOfflineData(); all cleared on logout
+    offlineHome.ts # home page folder cards + my saved items kept for offline (same prefix, cleared with the lists)
+    offlineFolders.ts # folder rename / status / delete made offline, queued by folder id
+    offlineAuto.ts # browser only: "Keep all lists offline" (default on), refreshAllOffline() keeps every list's copy fresh
+    offlineSync.ts # browser only: page cache for public/sw.js; syncAllOffline() sends offline changes when back online
+                   #   (Web Lock "listy-sync", shared with the service worker); requestBackgroundSync()
     chat.ts        # list chat + presence handlers shared by member and guest routes; userChatter / guestChatter
     presence.ts    # in-memory "who has this list open" (per process, like rateLimit.ts)
     guestId.ts     # browser: random guest id in localStorage, sent as x-listy-guest
@@ -143,6 +162,8 @@ src/
     ChatMessage.ts # list chat message; authorKey (never sent) marks "mine"; deleted with the folder
   test/
     setup.ts       # setupTestDb(), makeRequest(), routeCtx(), json<T>(), createUserAndCookie()
+    memoryStorage.ts # in-memory localStorage for offline tests
+    fakeBrowser.ts # stubBrowser() + fakeServer() for tests of the browser-side offline sync
 ```
 
 ## How to write code

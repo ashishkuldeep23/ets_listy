@@ -1,7 +1,8 @@
 "use client";
 
 // Top bar with the app name, my avatar + first name (→ profile) and Logout.
-// Also hosts the chat toasts for logged-in users.
+// Also hosts the chat toasts for logged-in users, and the offline changes
+// pill (OfflineStatus), which also sends those changes when back online.
 // Pages are already protected by src/proxy.js; if /api/auth/me still says
 // 401 (e.g. the account was deleted), send the user to login, except on
 // pages open to guests (`allowGuest`), which show a Log in button instead.
@@ -12,10 +13,13 @@ import { useEffect, useState } from "react";
 import { ListChecks, LogIn, LogOut } from "lucide-react";
 import Avatar, { firstNameOf } from "@/components/Avatar";
 import ChatToasts from "@/components/ChatToasts";
+import InstallButton from "@/components/InstallButton";
 import LiveDot from "@/components/LiveDot";
+import OfflineStatus from "@/components/OfflineStatus";
 import { ME_UPDATED_EVENT } from "@/lib/constants";
-import { clearOfflineLists } from "@/lib/offlineLists";
-import { clearOfflineCache } from "@/lib/offlineSync";
+import { claimOfflineData, clearOfflineLists } from "@/lib/offlineLists";
+import { whenOfflineReady } from "@/lib/offlineStore";
+import { clearOfflineCache, pendingChangeCount } from "@/lib/offlineSync";
 import type { SessionUser } from "@/types";
 
 export default function Header({ allowGuest = false }: { allowGuest?: boolean }) {
@@ -26,17 +30,33 @@ export default function Header({ allowGuest = false }: { allowGuest?: boolean })
   const [guestNext, setGuestNext] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/auth/me")
-      .then((res): Promise<SessionUser> | null => {
-        if (res.status === 401) {
-          if (allowGuest) setGuestNext(window.location.pathname);
-          else router.replace("/login");
-          return null;
-        }
-        return res.ok ? res.json() : null;
-      })
-      .then((data) => data && setUser(data))
-      .catch(() => {});
+    let known = false;
+    const load = () => {
+      if (known) return;
+      fetch("/api/auth/me")
+        .then((res): Promise<SessionUser> | null => {
+          if (res.status === 401) {
+            known = true;
+            if (allowGuest) setGuestNext(window.location.pathname);
+            else router.replace("/login");
+            return null;
+          }
+          return res.ok ? res.json() : null;
+        })
+        .then(async (data) => {
+          if (!data) return;
+          known = true;
+          // Before anything is synced as this user: drops another user's offline data.
+          await whenOfflineReady();
+          claimOfflineData(data.id);
+          setUser(data);
+        })
+        .catch(() => {});
+    };
+    load();
+    // Opened offline: find out who this is once the connection returns, so offline changes can be sent.
+    window.addEventListener("online", load);
+    return () => window.removeEventListener("online", load);
   }, [router, allowGuest]);
 
   // The profile page changed my name: show it without a reload.
@@ -47,6 +67,10 @@ export default function Header({ allowGuest = false }: { allowGuest?: boolean })
   }, []);
 
   async function logout() {
+    const unsent = pendingChangeCount();
+    if (unsent > 0 && !confirm(`${unsent} offline ${unsent === 1 ? "change has" : "changes have"} not been sent yet and will be lost. Log out anyway?`)) {
+      return;
+    }
     await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
     // Lists saved for offline use stay on the device otherwise; the next person here shouldn't see them.
     clearOfflineLists();
@@ -68,6 +92,8 @@ export default function Header({ allowGuest = false }: { allowGuest?: boolean })
       <div className="flex min-h-8.5 items-center gap-3 text-sm">
         {/* Guests can't join live channels (their list polls instead), so no "Live" dot for them. */}
         {knownUser && <LiveDot />}
+        <OfflineStatus loggedIn={user !== null} />
+        <InstallButton />
         {user && (
           <Link
             href="/profile"

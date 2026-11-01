@@ -169,6 +169,7 @@ export default function PublicListView({ token }: { token: string }) {
             status={list.status}
             items={items}
             toggleBase={canCheck ? `${base}/items` : null}
+            canEdit={false}
             onSynced={refreshNow}
           />
         </div>

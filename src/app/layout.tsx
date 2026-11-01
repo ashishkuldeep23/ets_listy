@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import ServiceWorker from "@/components/ServiceWorker";
@@ -17,6 +17,14 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Listy",
   description: "Make and manage simple lists",
+  // Installed on iOS (Add to Home Screen): own window and icon. The manifest covers other browsers.
+  appleWebApp: { capable: true, title: "Listy", statusBarStyle: "black-translucent" },
+  icons: { apple: "/icons/apple-touch-icon.png" },
+};
+
+// Browser / app title bar colour: the surface token (header), as in app/manifest.ts.
+export const viewport: Viewport = {
+  themeColor: "#14171c",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

@@ -4,6 +4,8 @@
 // - Pages: network first. If the network fails, serve the copy that "Save
 //   offline" put in the cache. A page already in the cache is refreshed on
 //   every successful visit, so it keeps pointing at current JS files.
+//   A list page that isn't cached goes to the home page instead, which opens
+//   the list's offline copy in place (/?list=/folders/<id>), if it has one.
 // - The page's data requests (Next.js "RSC" fetches of the same path):
 //   network first, and for a saved page the last answer of each kind is kept
 //   for offline. The page HTML is only a shell; its own inline script
@@ -17,6 +19,15 @@
 //   offline comes from localStorage, not from here.
 // - Cache Storage can fail (private mode, full disk, a broken profile). Then
 //   the worker just passes requests through: it must never break the site.
+// - Background sync ("sync" event, Chrome / Edge / Android): once the
+//   connection is back, sends changes made offline. If a Listy page is open
+//   it does that itself (asked by message); otherwise sw-sync.js does it here,
+//   so changes go out even after every tab was closed.
+
+importScripts("/sw-sync.js");
+
+const SYNC_TAG = "listy-sync"; // must match src/lib/offlineSync.ts
+const SYNC_LOCK = "listy-sync"; // also held by the page while it syncs
 
 const CACHE = "listy-offline-v1"; // must match OFFLINE_CACHE in src/lib/offlineSync.ts
 
@@ -71,7 +82,12 @@ async function page(request, path) {
     }
     return response;
   } catch {
-    return (await fromCache(path)) ?? Response.error();
+    const cached = await fromCache(path);
+    if (cached) return cached;
+    if (/^\/folders\/[^/]+$/.test(path) && (await fromCache("/"))) {
+      return Response.redirect(new URL(`/?list=${encodeURIComponent(path)}`, self.location.origin).href, 302);
+    }
+    return Response.error();
   }
 }
 
@@ -106,4 +122,20 @@ async function staticAsset(request) {
   const response = await fetch(request);
   if (response.ok) await toCache(request, response.clone());
   return response;
+}
+
+self.addEventListener("sync", (event) => {
+  if (event.tag === SYNC_TAG) event.waitUntil(backgroundSync());
+});
+
+async function backgroundSync() {
+  const pages = await self.clients.matchAll({ type: "window" });
+  if (pages.length > 0) {
+    pages.forEach((page) => page.postMessage(SYNC_TAG));
+    return;
+  }
+  const run = () => self.ListySync.syncAll({ store: self.ListySync.idbStore(), fetch: (url, init) => fetch(url, init) });
+  const complete = await (self.navigator.locks ? self.navigator.locks.request(SYNC_LOCK, run) : run());
+  // A rejected sync is tried again later by the browser.
+  if (!complete) throw new Error("Offline changes left to send");
 }
