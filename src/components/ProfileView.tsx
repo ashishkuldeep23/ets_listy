@@ -11,6 +11,7 @@ import Avatar from "@/components/Avatar";
 import ErrorText from "@/components/ErrorText";
 import ItemForm, { type ItemFormValues } from "@/components/ItemForm";
 import Loading from "@/components/Loading";
+import PasswordInput from "@/components/PasswordInput";
 import ProgressBar from "@/components/ProgressBar";
 import StatusBadge from "@/components/StatusBadge";
 import { useSavedItems } from "@/hooks/useSavedItems";
@@ -289,13 +290,15 @@ function EditProfileDialog({
 
   const setPassword = (field: keyof typeof passwords) => (e: ChangeEvent<HTMLInputElement>) =>
     setPasswords((p) => ({ ...p, [field]: e.target.value }));
+  // Shown while typing, and blocks Save: no "forgot password" exists, so a typo would lock the person out.
+  // Waits for the confirm field, so it doesn't complain before there is anything to compare.
+  const passwordsDiffer = passwords.confirm !== "" && passwords.next !== passwords.confirm;
 
   async function save(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) return setError("Please enter your name");
-    // No "forgot password" exists, so a typo here would lock the person out.
-    if (passwords.next !== passwords.confirm) return setError("The new passwords don't match");
+    if (passwordsDiffer) return;
     const changingPassword = passwords.next !== "";
     if (trimmed === user.name && !changingPassword) return ref.current?.close();
     setSaving(true);
@@ -380,39 +383,35 @@ function EditProfileDialog({
             {passwordStatus.hasPassword && (
               <label className="flex flex-col gap-1 text-sm">
                 Current password
-                <input
-                  type="password"
+                <PasswordInput
                   value={passwords.current}
                   onChange={setPassword("current")}
                   required={passwords.next !== ""}
                   autoComplete="current-password"
-                  className="input"
                 />
               </label>
             )}
             <label className="flex flex-col gap-1 text-sm">
               New password
-              <input
-                type="password"
+              <PasswordInput
                 value={passwords.next}
                 onChange={setPassword("next")}
                 minLength={LIMITS.PASSWORD_MIN}
                 placeholder={`At least ${LIMITS.PASSWORD_MIN} characters`}
                 autoComplete="new-password"
-                className="input"
               />
             </label>
             <label className="flex flex-col gap-1 text-sm">
               Confirm new password
-              <input
-                type="password"
+              <PasswordInput
                 value={passwords.confirm}
                 onChange={setPassword("confirm")}
                 required={passwords.next !== ""}
                 autoComplete="new-password"
-                className="input"
+                aria-invalid={passwordsDiffer}
               />
             </label>
+            <ErrorText message={passwordsDiffer ? "The new passwords don't match" : ""} />
           </fieldset>
         )}
 
@@ -422,7 +421,7 @@ function EditProfileDialog({
           <button type="button" onClick={() => ref.current?.close()} className="btn-ghost text-sm">
             Cancel
           </button>
-          <button className="btn-primary text-sm" disabled={saving || !name.trim()}>
+          <button className="btn-primary text-sm" disabled={saving || !name.trim() || passwordsDiffer}>
             {saving ? "Saving…" : "Save"}
           </button>
         </div>

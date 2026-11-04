@@ -9,6 +9,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 import { ListChecks, LoaderCircle, LockKeyhole, LogIn, Mail, UserPlus, UserRound } from "lucide-react";
 import ErrorText from "@/components/ErrorText";
+import PasswordInput from "@/components/PasswordInput";
 import { safeNextPath } from "@/lib/safeRedirect";
 
 interface AuthFormProps {
@@ -113,15 +114,14 @@ export default function AuthForm({ mode, passwordAllowed, googleAllowed }: AuthF
           />
         </Field>
         <Field icon={<LockKeyhole />}>
-          <input
-            type="password"
+          <PasswordInput
             value={form.password}
             onChange={update("password")}
             placeholder={isSignup ? "Password (min 8 characters)" : "Password"}
             autoComplete={isSignup ? "new-password" : "current-password"}
             minLength={isSignup ? 8 : undefined}
             required
-            className="input w-full pl-9"
+            className="pl-9"
           />
         </Field>
 

@@ -104,6 +104,7 @@ src/
     FolderView.tsx           # folder page body
     StatusBadge.tsx          # folder status label + icon (STATUS_ICONS, one per status)
     ErrorText.tsx            # red error line with alert icon (use for every error message)
+    PasswordInput.tsx        # password input with show/hide eye button (use for every password field)
     Loading.tsx              # spinner + "Loading…"
     ProgressBar.tsx          # "3 / 10 done" bar
     ItemForm.tsx             # add / edit item (name required, rest optional)
