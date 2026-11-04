@@ -98,7 +98,7 @@ src/
     profile/page.tsx         # my profile + saved items (components/ProfileView.tsx)
   components/
     Header.tsx               # top bar: avatar + first name (→ profile), Logout, ChatToasts
-    Footer.tsx               # bottom of every page (root layout): Feedback link
+    Footer.tsx               # bottom of every page (root layout): brand, links, copyright (CopyrightYear.tsx: year, browser only)
     Avatar.tsx               # round initial "logo" (+ initialOf, firstNameOf)
     ReminderButton.tsx       # clock button + popup on a list and on home cards: set / remove my reminder, add to calendar
     ListChat.tsx             # bottom-right chat button + panel on a list (members + guests), presence heartbeat
