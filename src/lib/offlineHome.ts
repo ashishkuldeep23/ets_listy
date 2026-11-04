@@ -49,6 +49,12 @@ export function getCachedFolders(scope: FolderScope, storage = browserStorage())
   }
 }
 
+/** One list's card from either tab, or null if this device hasn't seen it. */
+export function getCachedFolder(id: string, storage = browserStorage()): FolderSummaryDTO | null {
+  const find = (scope: FolderScope) => getCachedFolders(scope, storage)?.folders.find((f) => f.id === id);
+  return find("mine") ?? find("shared") ?? null;
+}
+
 const isSavedItem = (v: unknown): v is SavedItemDTO =>
   isRecord(v) &&
   typeof v.id === "string" &&

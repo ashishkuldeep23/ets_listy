@@ -46,7 +46,9 @@ tab is open. `sw-sync.js` is plain JS that repeats `syncAllOffline()` in
 Instant UI: list and item changes on `FolderView`/`FolderList` are never awaited.
 They go into the offline store first (same queue as offline use), then
 `requestSyncNow()` makes `OfflineStatus` send them in the background. Failures stay
-queued and retry; refusals are undone and shown in the header pill.
+queued and retry; refusals are undone and shown in the header pill. Loading is
+instant too: home cards and a list's page show this device's saved data at once,
+then the server's answer replaces it.
 
 Feature prompts for upcoming work live in `prompts/` (start with
 `prompts/README.md` and `prompts/_common.md`).
@@ -65,7 +67,7 @@ src/
     api/auth/signup|login|logout|me/route.ts  # me: GET, PATCH { name } (email can't change)
     api/auth/google/route.ts, google/callback/route.ts # Google login (state cookie, then session)
     api/auth/password/route.ts # GET status, POST { newPassword, currentPassword? } (logged in; off when Google-only)
-    api/folders/route.ts     # GET ?scope=mine|shared&status= (+ counts, perms, progress), POST create
+    api/folders/route.ts     # GET ?scope=mine|shared&status= (+ counts, perms, progress, my reminder), POST create
     api/folders/[id]/route.ts # GET (+ canCheck/canEdit/canManage), PATCH, DELETE (+ its items)
     api/folders/[id]/reminder/route.ts           # GET, PUT { remindAt }, DELETE: MY reminder (any member)
     api/push/subscription/route.ts               # POST, DELETE { endpoint }: this device's notifications
@@ -87,14 +89,18 @@ src/
     api/share/[token]/presence|chat/route.ts     # same for guests: no login, x-listy-guest header, rate-limited
     api/chat/recent/route.ts                     # GET ?after=: new messages in my lists (toast fallback without Pusher)
     share/[token]/page.tsx   # open to everyone: logged in → join; guest → PublicListView (read-only)
+    feedback/page.tsx        # leave + read feedback (components/FeedbackView.tsx)
+    api/feedback/route.ts                        # GET all (not deleted), POST (rate-limited)
+    api/feedback/[id]/route.ts                   # PATCH, DELETE = soft delete (author only, else 404)
     api/saved-items/route.ts                     # GET ?q= (my saved items), POST (upsert)
     api/saved-items/[id]/route.ts                # PATCH (409 on duplicate), DELETE
     api/users/search/route.ts                    # GET ?q= (name/email prefix, max 8, not me; invite box)
     profile/page.tsx         # my profile + saved items (components/ProfileView.tsx)
   components/
     Header.tsx               # top bar: avatar + first name (→ profile), Logout, ChatToasts
+    Footer.tsx               # bottom of every page (root layout): Feedback link
     Avatar.tsx               # round initial "logo" (+ initialOf, firstNameOf)
-    ReminderButton.tsx       # clock button + popup on a list: set / remove my reminder, add to calendar
+    ReminderButton.tsx       # clock button + popup on a list and on home cards: set / remove my reminder, add to calendar
     ListChat.tsx             # bottom-right chat button + panel on a list (members + guests), presence heartbeat
     ChatToasts.tsx           # toasts for new messages in my lists, except on that list's own page
     ViewersButton.tsx        # "N viewing" pill; tap → who is here (name + email for members, guests "Anonymous")
@@ -140,6 +146,7 @@ src/
     pushClient.ts  # browser: enablePush() (permission + subscribe), disablePush() on logout
     pushValidators.ts # reminder + push subscription bodies; endpoints limited to known push services (SSRF)
     calendar.ts    # googleCalendarUrl(), icsContent(), toDateTimeLocal()
+    feedback.ts    # feedback defaults, feedbackTone(): a card's stable colours
     auth.ts        # hashPassword, getSessionUser, requireUser, session cookie
     access.ts      # getFolderAccess() (one folder) + sharedWithUser() (bulk): the ONLY permission logic
     shares.ts      # listShares(), getShareLink(), serializeShareLink() for the owner view;
@@ -179,6 +186,7 @@ src/
     SavedItem.ts   # private per user; unique owner+nameKey+categoryKey (case-insensitive)
     Share.ts       # folder + sharedWith (unique), canCheck/canEdit; normalize/mergePermissions()
     ShareLink.ts   # one per folder; random 32-char token (newShareToken), enabled flag
+    Feedback.ts    # soft deleted: every query filters with NOT_DELETED; author id never sent (`mine` flag only)
     Reminder.ts    # one per user + list; sentAt null until sent
     PushSubscription.ts # a device that gets my notifications; endpoint unique, moves to whoever logs in there
     ChatMessage.ts # list chat message; authorKey (never sent) marks "mine"; deleted with the folder
@@ -224,7 +232,9 @@ src/
   `btn-secondary`, `btn-ghost`, `input`, `card`, `link`, `link-danger`.
 - Icons: `lucide-react`, always `aria-hidden` next to visible text (icon-only
   buttons need a `title` and an `sr-only` label). `icon-nudge` = size-4 icon
-  that grows on hover. Motion tokens in `@theme`: `animate-pop`,
+  that grows on hover. Everything pressable eases and shrinks a little on press
+  (`globals.css`); `stagger` makes a list's `animate-fade-up` cards appear in turn.
+  Motion tokens in `@theme`: `animate-pop`,
   `animate-fade-up`, `animate-wiggle`, `animate-float` (all disabled by
   prefers-reduced-motion). Keep motion small and quick.
 

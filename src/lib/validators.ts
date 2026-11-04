@@ -1,5 +1,6 @@
 import { LIMITS } from "@/lib/limits";
 import { GUEST_ID_RE, STATUS_VALUES, isFolderStatus, type FolderStatus } from "@/lib/constants";
+import { FEEDBACK_DEFAULT_NAME, FEEDBACK_DEFAULT_RATING } from "@/lib/feedback";
 import type { Result } from "@/types";
 
 // Plain validators for request bodies. Each takes `unknown` (whatever the
@@ -441,6 +442,36 @@ export function validatePasswordChange(body: unknown): Result<{ newPassword: str
   if (typeof currentPassword !== "string") return fail("current password must be a string");
   if (Buffer.byteLength(currentPassword, "utf8") > LIMITS.PASSWORD_MAX_BYTES) return fail("Your current password is wrong");
   return { ok: true, value: { newPassword: newPassword.value, currentPassword } };
+}
+
+/* ---------- feedback ---------- */
+
+export interface FeedbackInput {
+  name: string;
+  rating: number;
+  message: string;
+}
+
+/** Body for creating or updating feedback: { message, name?, rating? }. Empty name and rating take the defaults. */
+export function validateFeedback(body: unknown): Result<FeedbackInput> {
+  if (!isPlainObject(body)) return fail("body must be a JSON object");
+  const { name, rating, message } = body;
+
+  if (name !== undefined && name !== null && typeof name !== "string") return fail("name must be a string");
+  const cleanedName = (name ?? "").trim() || FEEDBACK_DEFAULT_NAME;
+  if (cleanedName.length > LIMITS.FEEDBACK_NAME_MAX) return fail(`name must be at most ${LIMITS.FEEDBACK_NAME_MAX} characters`);
+
+  const stars = rating ?? FEEDBACK_DEFAULT_RATING;
+  if (typeof stars !== "number" || !Number.isInteger(stars) || stars < LIMITS.FEEDBACK_RATING_MIN || stars > LIMITS.FEEDBACK_RATING_MAX) {
+    return fail(`rating must be a whole number from ${LIMITS.FEEDBACK_RATING_MIN} to ${LIMITS.FEEDBACK_RATING_MAX}`);
+  }
+
+  if (typeof message !== "string") return fail("message is required");
+  const text = message.trim();
+  if (!text) return fail("message is required");
+  if (text.length > LIMITS.FEEDBACK_MESSAGE_MAX) return fail(`message must be at most ${LIMITS.FEEDBACK_MESSAGE_MAX} characters`);
+
+  return { ok: true, value: { name: cleanedName, rating: stars, message: text } };
 }
 
 /* ---------- list chat ---------- */

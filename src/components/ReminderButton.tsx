@@ -6,6 +6,7 @@
 // e.g. permission refused. Calendar events don't follow later changes here.
 
 import { useEffect, useState, type FormEvent } from "react";
+import { createPortal } from "react-dom";
 import { AlarmClock, BellOff, CalendarPlus, Check, Download, LoaderCircle, Trash2, X } from "lucide-react";
 import ErrorText from "@/components/ErrorText";
 import { apiFetch } from "@/lib/apiClient";
@@ -25,9 +26,28 @@ function downloadIcs(event: CalendarEvent) {
   URL.revokeObjectURL(url);
 }
 
-export default function ReminderButton({ folderId, listName }: { folderId: string; listName: string }) {
+interface ReminderButtonProps {
+  folderId: string;
+  listName: string;
+  /** Already known (home cards get it with the list). Left out: the button loads it itself. */
+  initial?: ReminderDTO | null;
+  onChange?: (reminder: ReminderDTO | null) => void;
+}
+
+export default function ReminderButton({ folderId, listName, initial, onChange }: ReminderButtonProps) {
   const url = `/api/folders/${folderId}/reminder`;
-  const [reminder, setReminder] = useState<ReminderDTO | null>(null);
+  const loadsItself = initial === undefined;
+  const [reminder, setReminderState] = useState<ReminderDTO | null>(initial ?? null);
+  // A newer `initial` (the list reloaded) replaces what is shown.
+  const [seenInitial, setSeenInitial] = useState(initial);
+  if (initial !== seenInitial) {
+    setSeenInitial(initial);
+    setReminderState(initial ?? null);
+  }
+  const setReminder = (next: ReminderDTO | null) => {
+    setReminderState(next);
+    onChange?.(next);
+  };
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
   const [earliest, setEarliest] = useState("");
@@ -37,15 +57,16 @@ export default function ReminderButton({ folderId, listName }: { folderId: strin
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    if (!loadsItself) return;
     let cancelled = false;
     apiFetch<ReminderResponse>(url)
-      .then((res) => !cancelled && setReminder(res.reminder))
+      .then((res) => !cancelled && setReminderState(res.reminder))
       // Only the label depends on it (offline, say); the popup still reports real failures.
       .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [url]);
+  }, [url, loadsItself]);
 
   useEffect(() => {
     if (!open) return;
@@ -75,10 +96,15 @@ export default function ReminderButton({ folderId, listName }: { folderId: strin
         body: JSON.stringify({ remindAt: new Date(value).toISOString() }),
       });
       setReminder(res.reminder);
-      // The reminder is saved: turning on notifications may take a while, and mustn't hold the form.
+      // Saved: close at once, since turning on notifications may take a while (permission prompt, slow push service).
+      setOpen(false);
       setBusy(false);
       const push = await enablePush();
-      if (!push.ok) setPushProblem(push.error);
+      // Comes back only if there's a problem: a silent failure would mean a reminder that never arrives.
+      if (!push.ok) {
+        setPushProblem(push.error);
+        setOpen(true);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -119,7 +145,8 @@ export default function ReminderButton({ folderId, listName }: { folderId: strin
         {upcoming ? <span>{dateLabel(upcoming.remindAt)}</span> : <span className="sr-only">Set a reminder</span>}
       </button>
 
-      {open && (
+      {/* In a portal: a home card moves on hover, and a moved parent would trap this "fixed" popup inside the card. */}
+      {open && createPortal(
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-bg/80 p-4" onClick={() => setOpen(false)}>
           <div
             role="dialog"
@@ -188,7 +215,8 @@ export default function ReminderButton({ folderId, listName }: { folderId: strin
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

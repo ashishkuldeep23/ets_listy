@@ -33,6 +33,13 @@ export const LIMITS = {
   /** People tracked per list (bounds memory if someone floods fake guest ids). */
   PRESENCE_PER_FOLDER: 100,
 
+  FEEDBACK_NAME_MAX: 60,
+  FEEDBACK_MESSAGE_MAX: 1000,
+  FEEDBACK_RATING_MIN: 1,
+  FEEDBACK_RATING_MAX: 5,
+  /** Newest feedback shown on the page. */
+  FEEDBACK_LIST: 100,
+
   /** How far ahead a reminder can be set. */
   REMINDER_MAX_DAYS: 366,
   /** Devices that get my reminders; the oldest is dropped beyond this. */

@@ -24,6 +24,17 @@ export function validateReminder(body: unknown, now = new Date()): Result<{ remi
   return { ok: true, value: { remindAt } };
 }
 
+/**
+ * VAPID_SUBJECT in the form web-push accepts, or null if it can't be used. A bare
+ * email is the easy mistake: web-push throws on it for every send, so no
+ * notification ever goes out. Normalized here so it works on any host's settings.
+ */
+export function vapidSubject(raw: string | undefined): string | null {
+  const subject = raw?.trim() ?? "";
+  if (/^[^\s@:/]+@[^\s@/]+$/.test(subject)) return `mailto:${subject}`;
+  return /^mailto:[^\s@]+@[^\s@]+$/.test(subject) || /^https:\/\/[^\s/]+/.test(subject) ? subject : null;
+}
+
 function cleanEndpoint(endpoint: unknown): string | null {
   if (typeof endpoint !== "string" || endpoint.length > LIMITS.PUSH_ENDPOINT_MAX) return null;
   try {

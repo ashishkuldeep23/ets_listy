@@ -5,6 +5,7 @@ import type { Types } from "mongoose";
 import webpush from "web-push";
 import { getFolderAccess } from "@/lib/access";
 import { connectDB } from "@/lib/db";
+import { vapidSubject } from "@/lib/pushValidators";
 import { PushSubscription, type IPushSubscription } from "@/models/PushSubscription";
 import { Reminder } from "@/models/Reminder";
 
@@ -16,7 +17,7 @@ const PUSH_TTL_SECONDS = 24 * 60 * 60;
 const RETRY_WINDOW_MS = 60 * 60_000;
 
 export const isPushConfigured = (): boolean =>
-  Boolean(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY && process.env.VAPID_SUBJECT);
+  Boolean(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY && vapidSubject(process.env.VAPID_SUBJECT));
 
 type SendOutcome = "sent" | "gone" | "failed";
 
@@ -26,7 +27,7 @@ async function sendPush(sub: IPushSubscription, payload: string): Promise<SendOu
       TTL: PUSH_TTL_SECONDS,
       urgency: "high",
       vapidDetails: {
-        subject: process.env.VAPID_SUBJECT ?? "",
+        subject: vapidSubject(process.env.VAPID_SUBJECT) ?? "",
         publicKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "",
         privateKey: process.env.VAPID_PRIVATE_KEY ?? "",
       },
@@ -37,7 +38,8 @@ async function sendPush(sub: IPushSubscription, payload: string): Promise<SendOu
     // 404 / 410: the user turned notifications off or the app was removed from that device.
     if (status === 404 || status === 410) return "gone";
     // The status only: the error also holds the endpoint, which works like a password for that device.
-    console.error("Push failed", status);
+    // No status means it never reached the push service (bad settings): the error's name still says so.
+    console.error("Push failed", status ?? (err instanceof Error ? err.name : "unknown"));
     return "failed";
   }
 }

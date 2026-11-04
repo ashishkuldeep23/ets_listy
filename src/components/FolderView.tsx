@@ -67,6 +67,7 @@ import {
   type OfflineList,
   type OfflineTick,
 } from "@/lib/offlineLists";
+import { getCachedFolder } from "@/lib/offlineHome";
 import { whenOfflineReady } from "@/lib/offlineStore";
 import { requestSyncNow } from "@/lib/offlineSync";
 import { computeTotals, groupItems } from "@/lib/totals";
@@ -117,9 +118,14 @@ export default function FolderView() {
   // Bumped to load again while the offline copy is showing.
   const [attempt, setAttempt] = useState(0);
   const retry = useCallback(() => setAttempt((a) => a + 1), []);
-  const [folder, setFolder] = useState<FolderDetailDTO | null>(null);
+  const [loadedFolder, setFolder] = useState<FolderDetailDTO | null>(null);
   const [items, setItems] = useState<ItemDTO[]>([]);
   const [state, setState] = useState<LoadState>("loading");
+  // While the server answers, open at once from this device's copy and the home page's card (which holds my permissions).
+  const instantCopy = !loadedFolder && state === "loading" && offlineReady ? getOfflineList(path) : null;
+  const instantCard = instantCopy ? getCachedFolder(id) : null;
+  const instantFolder = instantCopy && instantCard ? { ...instantCard, name: instantCopy.name, status: instantCopy.status } : null;
+  const folder = loadedFolder ?? instantFolder;
   // Who has this list open (viewers pill + chat); starts once the list loaded.
   const presence = usePresence(`/api/folders/${id}`, false, state === "ready");
   const [error, setError] = useState("");
@@ -249,9 +255,9 @@ export default function FolderView() {
 
   if (state === "offline" || (!online && offlineReady && getOfflineList(path))) return <OfflineListView path={path} onRetry={retry} />;
   // Offline with no saved copy: nothing will load, say so instead of spinning.
-  if (state === "loading" && online) return <Loading />;
+  if (state === "loading" && online && !folder) return <Loading />;
 
-  if (state !== "ready" || !folder) {
+  if ((state !== "ready" && !instantFolder) || !folder) {
     return (
       <div className="card animate-fade-up">
         <h1 className="mb-2 flex items-center gap-2 text-xl font-semibold">
@@ -417,15 +423,18 @@ export default function FolderView() {
         <div className="ml-auto flex gap-2">
           <ViewersButton people={presence.people} />
           <ReminderButton folderId={folder.id} listName={folder.name} />
-          <SaveOfflineButton
-            path={path}
-            name={folder.name}
-            status={folder.status}
-            items={items}
-            toggleBase={folder.canCheck ? itemsUrl : null}
-            canEdit={folder.canEdit}
-            onSynced={refetch}
-          />
+          {/* Only once loaded: it saves `items` into the copy, and they are still empty before that. */}
+          {state === "ready" && (
+            <SaveOfflineButton
+              path={path}
+              name={folder.name}
+              status={folder.status}
+              items={items}
+              toggleBase={folder.canCheck ? itemsUrl : null}
+              canEdit={folder.canEdit}
+              onSynced={refetch}
+            />
+          )}
           {folder.canManage && !showShare && (
             <button onClick={() => setShowShare(true)} className="btn-secondary text-sm" title="Share">
               <Share2 className="icon-nudge" aria-hidden />

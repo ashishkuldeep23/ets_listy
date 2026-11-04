@@ -8,6 +8,7 @@ import type { FolderCounts, FolderListResponse, FolderPermissions, FolderScope }
 import { isValidStatus, validateCreateFolder } from "@/lib/validators";
 import { jsonError, readJson, serverError } from "@/lib/http";
 import { Folder, serializeFolder, statusFilter } from "@/models/Folder";
+import { Reminder, serializeReminder } from "@/models/Reminder";
 import { countItemsByFolder } from "@/lib/items";
 import { folderExistsMessage, folderNameTaken } from "@/lib/duplicates";
 
@@ -69,13 +70,19 @@ export async function GET(request: Request): Promise<Response> {
     for (const g of grouped) if (isFolderStatus(g._id)) counts[g._id] = g.n;
     counts.all = grouped.reduce((sum, g) => sum + g.n, 0);
 
-    // Item progress for every folder card, in one query.
-    const progress = await countItemsByFolder(folders.map((f) => f._id));
+    // Item progress and my reminder for every folder card, one query each rather than one per card.
+    const folderIds = folders.map((f) => f._id);
+    const [progress, reminders] = await Promise.all([
+      countItemsByFolder(folderIds),
+      Reminder.find({ user: user.id, folder: { $in: folderIds } }).select("folder remindAt sentAt").lean(),
+    ]);
+    const reminderOf = new Map(reminders.map((r) => [String(r.folder), serializeReminder(r)]));
     const body: FolderListResponse = {
       folders: folders.map((f) => ({
         ...serializeFolder(f),
         ...permsFor(String(f._id)),
         ...(progress.get(String(f._id)) ?? { itemCount: 0, doneCount: 0 }),
+        reminder: reminderOf.get(String(f._id)) ?? null,
       })),
       counts,
     };

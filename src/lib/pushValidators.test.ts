@@ -1,9 +1,32 @@
 import { describe, expect, it } from "vitest";
+import webpush from "web-push";
 import { LIMITS } from "@/lib/limits";
 import { vapidKeyBytes } from "@/lib/pushClient";
-import { validatePushEndpoint, validatePushSubscription, validateReminder } from "@/lib/pushValidators";
+import { validatePushEndpoint, validatePushSubscription, validateReminder, vapidSubject } from "@/lib/pushValidators";
 
 const NOW = new Date("2026-11-04T10:00:00.000Z");
+
+describe("vapidSubject", () => {
+  it("adds mailto: to a bare email", () => {
+    expect(vapidSubject(" a@example.com ")).toBe("mailto:a@example.com");
+  });
+
+  it("keeps a mailto: or https address", () => {
+    expect(vapidSubject("mailto:a@example.com")).toBe("mailto:a@example.com");
+    expect(vapidSubject("https://listy.example.com")).toBe("https://listy.example.com");
+  });
+
+  it.each([[undefined], [""], ["not an address"], ["http://listy.example.com"], ["mailto:nobody"]])("refuses %s", (value) => {
+    expect(vapidSubject(value)).toBeNull();
+  });
+
+  it("gives what the real web-push library accepts; a bare email is refused by it", () => {
+    const { publicKey, privateKey } = webpush.generateVAPIDKeys();
+    const headers = (subject: string) => webpush.getVapidHeaders("https://fcm.googleapis.com", subject, publicKey, privateKey, "aes128gcm");
+    expect(() => headers("a@example.com")).toThrow();
+    expect(() => headers(vapidSubject("a@example.com") ?? "")).not.toThrow();
+  });
+});
 
 describe("validateReminder", () => {
   it("accepts a future date and returns only that", () => {

@@ -92,7 +92,7 @@ export default function ItemRow({
                onChange={onToggle}
                disabled={!canCheck}
                aria-label={`Mark ${item.name} as ${item.done ? "not done" : "done"}`}
-               className="peer size-5 cursor-pointer appearance-none rounded-full border-2 border-border transition-colors outline-none checked:border-primary checked:bg-primary hover:border-primary focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-60"
+               className="peer size-5 cursor-pointer appearance-none rounded-full border-2 border-border transition-[color,background-color,border-color,scale] duration-150 outline-none not-disabled:active:scale-85 checked:border-primary checked:bg-primary hover:border-primary focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-60"
             />
             <Check
                className="pointer-events-none absolute size-3.5 scale-0 text-on-primary transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] peer-checked:scale-100"

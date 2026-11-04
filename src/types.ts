@@ -17,6 +17,21 @@ export interface PasswordStatus {
   hasPassword: boolean;
 }
 
+/** One feedback entry. Who wrote it stays hidden: only the name they chose, and whether it is mine. */
+export interface FeedbackDTO {
+  id: string;
+  name: string;
+  rating: number;
+  message: string;
+  mine: boolean;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
+
+export interface FeedbackListResponse {
+  feedback: FeedbackDTO[];
+}
+
 /** A folder as the API returns it. */
 export interface FolderDTO {
   id: string;
@@ -57,6 +72,8 @@ export type FolderCounts = Record<FolderStatus | "all", number>;
 export interface FolderSummaryDTO extends FolderDTO, FolderPermissions {
   itemCount: number;
   doneCount: number;
+  /** My own reminder for it. Missing on cards saved on this device before this existed. */
+  reminder?: ReminderDTO | null;
 }
 
 /** Which folders the home page lists. */

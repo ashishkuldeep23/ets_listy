@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { getCachedFolders, getCachedSavedItems, saveCachedFolders, saveCachedSavedItems } from "@/lib/offlineHome";
+import { getCachedFolder, getCachedFolders, getCachedSavedItems, saveCachedFolders, saveCachedSavedItems } from "@/lib/offlineHome";
 import { clearOfflineLists } from "@/lib/offlineLists";
 import { MemoryStorage } from "@/test/memoryStorage";
 import type { FolderSummaryDTO } from "@/types";
@@ -54,6 +54,21 @@ describe("saveCachedFolders / getCachedFolders", () => {
     saveCachedFolders("mine", [folder("a")], NOW, storage);
     clearOfflineLists(storage);
     expect(getCachedFolders("mine", storage)).toBeNull();
+  });
+});
+
+describe("getCachedFolder", () => {
+  it("finds a list's card in either tab", () => {
+    saveCachedFolders("mine", [folder("a")], NOW, storage);
+    saveCachedFolders("shared", [folder("b")], NOW, storage);
+    expect(getCachedFolder("a", storage)?.id).toBe("a");
+    expect(getCachedFolder("b", storage)?.id).toBe("b");
+  });
+
+  it("returns null for an unknown list, or without storage", () => {
+    saveCachedFolders("mine", [folder("a")], NOW, storage);
+    expect(getCachedFolder("z", storage)).toBeNull();
+    expect(getCachedFolder("a", null)).toBeNull();
   });
 });
 

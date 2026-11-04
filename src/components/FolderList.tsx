@@ -6,7 +6,8 @@
 // (/?tab=shared&status=pending) so refresh and the Back button keep them.
 // Live: listens on my user channel, so card progress updates as anyone
 // ticks items, and the shared tab refreshes when I gain or lose a folder.
-// Offline: shows the cards last loaded (kept by lib/offlineHome.ts). Lists
+// Instant: the cards last loaded show at once, then the server's answer replaces them.
+// Offline: shows those same cards (kept by lib/offlineHome.ts). Lists
 // saved offline, and lists made offline, open right here (?list=<path>,
 // OfflineListView), since their own pages may not be cached; others can't
 // be opened. New lists can be made offline, and my lists renamed, given a
@@ -64,6 +65,7 @@ import {
 import { whenOfflineReady } from "@/lib/offlineStore";
 import { cachePageForOffline, isPageCached, OFFLINE_SYNCED_EVENT, requestSyncNow, type OfflineSyncedDetail } from "@/lib/offlineSync";
 import ProgressBar from "@/components/ProgressBar";
+import ReminderButton from "@/components/ReminderButton";
 import StatusBadge from "@/components/StatusBadge";
 import type {
   FolderCounts,
@@ -72,6 +74,7 @@ import type {
   FolderProgressEvent,
   FolderScope,
   FolderSummaryDTO,
+  ReminderDTO,
 } from "@/types";
 
 type Filter = FolderStatus | "all";
@@ -154,11 +157,11 @@ export default function FolderList() {
   // A list opened in place (offline copy, or a list made offline).
   const openPath = searchParams.get("list");
 
-  // Server data for the current tab: every folder in it; the status filter is applied here.
+  // Server data for one tab: every folder in it; the status filter is applied here.
   const [data, setData] = useState<FolderListResponse | null>(null);
+  const [dataTab, setDataTab] = useState<FolderScope | null>(null);
   const [name, setName] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
   // The last load failed for lack of network (the browser may still say "online").
   const [unreachable, setUnreachable] = useState(false);
   const offline = !online || unreachable;
@@ -167,6 +170,7 @@ export default function FolderList() {
   const show = useCallback(
     (res: FolderListResponse) => {
       setData(res);
+      setDataTab(tab);
       setUnreachable(false);
       saveCachedFolders(tab, res.folders);
     },
@@ -184,8 +188,7 @@ export default function FolderList() {
         if (cancelled) return;
         if (err instanceof ApiError) setError(err.message);
         else setUnreachable(true);
-      })
-      .finally(() => !cancelled && setLoading(false));
+      });
     return () => {
       cancelled = true;
     };
@@ -278,7 +281,9 @@ export default function FolderList() {
 
   // Nothing is read from storage on the server or while hydrating.
   const localLists = offlineVersion < 0 ? [] : listOfflineLists().filter((l) => l.created);
-  const serverFolders = offline ? (offlineVersion < 0 ? null : getCachedFolders(tab)?.folders ?? null) : (data?.folders ?? null);
+  // This tab's server answer, else (offline, or still loading) the cards saved last time.
+  const loadedFolders = !offline && dataTab === tab ? (data?.folders ?? null) : null;
+  const serverFolders = loadedFolders ?? (offlineVersion < 0 ? null : getCachedFolders(tab)?.folders ?? null);
   // Folder changes made offline show until they are sent.
   const folderChanges = offlineVersion < 0 ? {} : getFolderChanges();
   const cards: Card[] = [
@@ -320,6 +325,11 @@ export default function FolderList() {
             : prev.folders.filter((f) => f.id !== id),
         }
     );
+  }
+
+  // So the card still shows it if a filter hides and brings it back before the next reload.
+  function setCardReminder(id: string, reminder: ReminderDTO | null) {
+    setData((prev) => prev && { ...prev, folders: prev.folders.map((f) => (f.id === id ? { ...f, reminder } : f)) });
   }
 
   async function updateFolder({ folder, local }: Card, changes: Partial<Pick<FolderDTO, "name" | "status">>) {
@@ -460,8 +470,8 @@ export default function FolderList() {
       </div>
 
       <ErrorText message={error} className="mb-4" />
-      {loading && !offline && !data && !error && <Loading />}
-      {(data || offline) && visible.length === 0 && (
+      {!offline && !serverFolders && !error && <Loading />}
+      {(serverFolders || offline) && visible.length === 0 && (
         <div className="card flex animate-fade-up flex-col items-center gap-3 py-10 text-center text-muted">
           {tab === "mine" ? (
             <ClipboardList className="size-10 animate-float text-primary/70" aria-hidden />
@@ -478,13 +488,14 @@ export default function FolderList() {
         </div>
       )}
 
-      <ul className="grid gap-4 sm:grid-cols-2">
+      <ul className="stagger grid gap-4 sm:grid-cols-2">
         {visible.map((card) => (
           <FolderCard
             key={card.folder.id}
             folder={card.folder}
             onUpdate={(changes) => updateFolder(card, changes)}
             onDelete={() => deleteFolder(card)}
+            onReminder={(reminder) => setCardReminder(card.folder.id, reminder)}
             // Offline (or not on the server yet): open the saved copy here; nothing to open without one.
             open={offline || card.local ? (card.offlinePath ? () => setParam("list", card.offlinePath) : null) : undefined}
             local={card.local !== null}
@@ -501,6 +512,7 @@ interface FolderCardProps {
   folder: FolderSummaryDTO;
   onUpdate: (changes: Partial<Pick<FolderDTO, "name" | "status">>) => Promise<boolean>;
   onDelete: () => void;
+  onReminder: (reminder: ReminderDTO | null) => void;
   /** Left out: a link to the list's page. A function: opens the offline copy here. null: can't be opened offline. */
   open?: (() => void) | null;
   /** Made offline and not on the server yet. */
@@ -509,7 +521,7 @@ interface FolderCardProps {
   syncError?: string | null;
 }
 
-function FolderCard({ folder, onUpdate, onDelete, open, local = false, offline = false, syncError = null }: FolderCardProps) {
+function FolderCard({ folder, onUpdate, onDelete, onReminder, open, local = false, offline = false, syncError = null }: FolderCardProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(folder.name);
 
@@ -640,9 +652,16 @@ function FolderCard({ folder, onUpdate, onDelete, open, local = false, offline =
           )}
         </div>
       )}
-      <span className="flex items-center gap-1 text-xs text-muted">
-        <CalendarClock className="size-3.5" aria-hidden />
-        Updated {new Date(folder.updatedAt).toLocaleDateString("en-IN")}</span>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="flex items-center gap-1 text-xs text-muted">
+          <CalendarClock className="size-3.5" aria-hidden />
+          Updated {new Date(folder.updatedAt).toLocaleDateString("en-IN")}
+        </span>
+        {/* Saving a reminder needs the server, so not offline or before the list exists there. */}
+        {!local && !offline && (
+          <ReminderButton folderId={folder.id} listName={folder.name} initial={folder.reminder ?? null} onChange={onReminder} />
+        )}
+      </div>
     </li>
   );
 }

@@ -13,6 +13,12 @@ export function vapidKeyBytes(key: string): Uint8Array<ArrayBuffer> {
   return bytes;
 }
 
+/** True if a subscription was made with this key. Without it, push services refuse every send to that subscription. */
+export function isSameKey(current: ArrayBuffer | null, wanted: Uint8Array): boolean {
+  if (!current || current.byteLength !== wanted.length) return false;
+  return new Uint8Array(current).every((byte, index) => byte === wanted[index]);
+}
+
 /** Registering can hang for good when the browser can't reach its push service: never wait for that. */
 const PUSH_TIMEOUT_MS = 15_000;
 
@@ -51,10 +57,12 @@ export async function enablePush(): Promise<Result<true>> {
     const subscription = await withTimeout(
       (async () => {
         const registration = await navigator.serviceWorker.ready;
-        return (
-          (await registration.pushManager.getSubscription()) ??
-          (await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidKeyBytes(key) }))
-        );
+        const applicationServerKey = vapidKeyBytes(key);
+        const existing = await registration.pushManager.getSubscription();
+        if (existing && isSameKey(existing.options.applicationServerKey, applicationServerKey)) return existing;
+        // Made with older keys: it can't receive anything, and subscribe() refuses while it exists.
+        await existing?.unsubscribe();
+        return registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey });
       })()
     );
     await apiFetch("/api/push/subscription", { method: "POST", body: JSON.stringify(subscription) });

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createUserAndCookie, json, makeRequest, routeCtx, setupTestDb } from "@/test/setup";
 import { GET as cron } from "@/app/api/cron/reminders/route";
+import { GET as listFolders } from "@/app/api/folders/route";
 import { DELETE as removeFolder } from "@/app/api/folders/[id]/route";
 import { DELETE as removeReminder, GET as getReminder, PUT as putReminder } from "@/app/api/folders/[id]/reminder/route";
 import { DELETE as removeDevice, POST as addDevice } from "@/app/api/push/subscription/route";
@@ -9,7 +10,7 @@ import { Folder } from "@/models/Folder";
 import { PushSubscription } from "@/models/PushSubscription";
 import { Reminder } from "@/models/Reminder";
 import { Share } from "@/models/Share";
-import type { ReminderResponse } from "@/types";
+import type { FolderListResponse, ReminderResponse } from "@/types";
 
 const sendNotification = vi.hoisted(() => vi.fn());
 vi.mock("web-push", () => ({ default: { sendNotification } }));
@@ -102,6 +103,24 @@ describe("/api/folders/:id/reminder", () => {
   });
 });
 
+describe("GET /api/folders: my reminder on each card", () => {
+  const cards = async (cookie: string, scope: string) => {
+    const res = await listFolders(makeRequest(`/api/folders?scope=${scope}`, { cookie }));
+    return (await json<FolderListResponse>(res)).folders;
+  };
+
+  it("has my reminder and nobody else's", async () => {
+    const { owner, id } = await setup();
+    const member = await createUserAndCookie({ email: "member@example.com" });
+    await Share.create({ folder: id, owner: owner.user.id, sharedWith: member.user.id, via: "email" });
+    expect((await cards(owner.cookie, "mine"))[0]?.reminder).toBeNull();
+
+    await put(member.cookie, id);
+    expect((await cards(member.cookie, "shared"))[0]?.reminder).toEqual({ remindAt: FUTURE, sent: false });
+    expect((await cards(owner.cookie, "mine"))[0]?.reminder).toBeNull();
+  });
+});
+
 describe("/api/push/subscription", () => {
   it("needs a login and a known push service", async () => {
     const { owner } = await setup();
@@ -149,6 +168,21 @@ describe("GET /api/cron/reminders", () => {
   it("answers 503 when push isn't set up", async () => {
     vi.stubEnv("VAPID_PRIVATE_KEY", "");
     expect((await runCron()).status).toBe(503);
+  });
+
+  it("answers 503 when the VAPID subject can't be used", async () => {
+    vi.stubEnv("VAPID_SUBJECT", "not an address");
+    expect((await runCron()).status).toBe(503);
+  });
+
+  it("sends with a mailto: subject when VAPID_SUBJECT is a bare email", async () => {
+    vi.stubEnv("VAPID_SUBJECT", "a@example.com");
+    const { owner, id } = await setup();
+    await subscribe(owner.cookie);
+    await makeDue(id, owner.user.id);
+
+    expect(await json(await runCron())).toEqual({ sent: 1 });
+    expect(sendNotification.mock.calls[0]?.[2]).toMatchObject({ vapidDetails: { subject: "mailto:a@example.com" } });
   });
 
   it("sends a due reminder once, with the list's name and link", async () => {

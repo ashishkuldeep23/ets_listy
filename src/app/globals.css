@@ -24,6 +24,14 @@
 
   --color-danger: #f87171;
 
+  /* Feedback card colours: each card gets one (lib/feedback.ts). */
+  --color-tone-1: #fbbf24;
+  --color-tone-2: #22d3ee;
+  --color-tone-3: #a78bfa;
+  --color-tone-4: #34d399;
+  --color-tone-5: #fb7185;
+  --color-tone-6: #60a5fa;
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 
@@ -72,10 +80,29 @@ body {
   font-family: var(--font-sans), system-ui, sans-serif;
 }
 
+/*
+  Micro-interactions shared by everything you can press. Outside any layer on
+  purpose: they must win over the transition-colors utility, or the press
+  would snap instead of easing.
+*/
+:is(button, .btn-primary, .btn-secondary, .btn-ghost, .link, .link-danger) {
+  transition-property: color, background-color, border-color, opacity, box-shadow, scale, translate, transform;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+:is(button, .btn-primary, .btn-secondary, .btn-ghost, .link, .link-danger):not(:disabled):active {
+  scale: 0.96;
+}
+/* Keyboard users see where they are; mouse clicks don't draw a ring. */
+:is(button, a):focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
 /* Shared building blocks, so every page looks the same. */
 @layer components {
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-md bg-primary px-4 py-2 font-medium text-on-primary transition-colors hover:bg-primary-hover disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md bg-primary px-4 py-2 font-medium text-on-primary hover:bg-primary-hover enabled:hover:-translate-y-px enabled:hover:shadow-lg enabled:hover:shadow-primary/25 disabled:opacity-50;
   }
   .btn-secondary {
     @apply inline-flex items-center justify-center gap-1.5 rounded-md border border-accent px-3 py-1.5 text-accent transition-colors hover:bg-accent/10 disabled:opacity-50;
@@ -84,7 +111,7 @@ body {
     @apply inline-flex items-center justify-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-fg transition-colors hover:bg-surface-2 disabled:opacity-50;
   }
   .input {
-    @apply rounded-md border border-border bg-surface px-3 py-2 text-fg placeholder:text-muted outline-none focus:border-accent focus:ring-1 focus:ring-accent;
+    @apply rounded-md border border-border bg-surface px-3 py-2 text-fg transition-[border-color,box-shadow] duration-150 placeholder:text-muted outline-none hover:border-muted/60 focus:border-accent focus:ring-2 focus:ring-accent/30;
   }
   .card {
     @apply rounded-lg border border-border bg-surface p-4;
@@ -101,6 +128,12 @@ body {
     @apply size-4 shrink-0 transition-transform duration-200;
   }
   :is(button, a, label):hover > .icon-nudge {
-    transform: scale(1.15);
+    transform: scale(1.15) rotate(-6deg);
   }
+  /* A list whose cards appear one after another (first few only, so long lists don't lag). */
+  .stagger > :nth-child(2) { animation-delay: 40ms; }
+  .stagger > :nth-child(3) { animation-delay: 80ms; }
+  .stagger > :nth-child(4) { animation-delay: 120ms; }
+  .stagger > :nth-child(5) { animation-delay: 160ms; }
+  .stagger > :nth-child(n + 6) { animation-delay: 200ms; }
 }
