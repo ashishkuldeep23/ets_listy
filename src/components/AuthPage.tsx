@@ -4,9 +4,10 @@
 
 import { connection } from "next/server";
 import AuthForm from "@/components/AuthForm";
-import { isGoogleConfigured, isGoogleOnly } from "@/lib/google";
+import { isGoogleConfigured, isGoogleOnly , showEnvValsOnConsole } from "@/lib/google";
 
 export default async function AuthPage({ mode }: { mode: "login" | "signup" }) {
   await connection();
+  showEnvValsOnConsole();
   return <AuthForm mode={mode} passwordAllowed={!isGoogleOnly()} googleAllowed={isGoogleConfigured()} />;
 }

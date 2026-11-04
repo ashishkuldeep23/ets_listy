@@ -25,6 +25,15 @@ export const isGoogleConfigured = (): boolean =>{
   console.log("GOOGLE_CLIENT_ID:", process.env.GOOGLE_CLIENT_ID, "GOOGLE_CLIENT_SECRET:", process.env.GOOGLE_CLIENT_SECRET);
   return Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)
 }
+
+
+export const showEnvValsOnConsole = () =>{
+  return {
+    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
+  }
+}
+
   // Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 
 /** Must exactly match an "Authorized redirect URI" in the Google Cloud console. */
