@@ -426,6 +426,23 @@ export function validateProfileUpdate(body: unknown): Result<{ name: string }> {
   return { ok: true, value: { name: name.value } };
 }
 
+/**
+ * Body for POST /api/auth/password. The current password only gets type and
+ * size checks: length rules are for new passwords, and older ones may not meet them.
+ */
+export function validatePasswordChange(body: unknown): Result<{ newPassword: string; currentPassword: string | null }> {
+  if (!isPlainObject(body)) return fail("body must be a JSON object");
+  const newPassword = cleanPassword(body.newPassword);
+  if (newPassword.error !== undefined) return fail(newPassword.error);
+  const { currentPassword } = body;
+  if (currentPassword === undefined || currentPassword === null || currentPassword === "") {
+    return { ok: true, value: { newPassword: newPassword.value, currentPassword: null } };
+  }
+  if (typeof currentPassword !== "string") return fail("current password must be a string");
+  if (Buffer.byteLength(currentPassword, "utf8") > LIMITS.PASSWORD_MAX_BYTES) return fail("Your current password is wrong");
+  return { ok: true, value: { newPassword: newPassword.value, currentPassword } };
+}
+
 /* ---------- list chat ---------- */
 
 /** Body for POST …/chat: { text }. Newlines are kept; the text is trimmed. */

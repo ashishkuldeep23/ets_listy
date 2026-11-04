@@ -1,12 +1,12 @@
 "use client";
 
-// Profile page body: my avatar, name and email (name editable in a
-// dialog, email read-only), the lists shared with me, and my saved items
+// Profile page body: my avatar, name and email (name and password editable
+// in a dialog, email read-only), the lists shared with me, and my saved items
 // library (search, add, edit, delete). Saved items are private to me.
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Bookmark, BookmarkX, ChevronRight, Lock, Mail, Pencil, Search, Tag, Trash2, Users, X } from "lucide-react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { Bookmark, BookmarkX, ChevronRight, KeyRound, Lock, Mail, Pencil, Search, Tag, Trash2, Users, X } from "lucide-react";
 import Avatar from "@/components/Avatar";
 import ErrorText from "@/components/ErrorText";
 import ItemForm, { type ItemFormValues } from "@/components/ItemForm";
@@ -19,7 +19,7 @@ import { ME_UPDATED_EVENT } from "@/lib/constants";
 import { formatPriceLine } from "@/lib/format";
 import { LIMITS } from "@/lib/limits";
 import { lineTotal } from "@/lib/totals";
-import type { FolderListResponse, FolderSummaryDTO, SavedItemDTO, SessionUser } from "@/types";
+import type { FolderListResponse, FolderSummaryDTO, PasswordStatus, SavedItemDTO, SessionUser } from "@/types";
 
 /** Saved items have no group, so send only their own fields. */
 function toSavedBody({ name, category, price, priceUnit, quantity, description }: ItemFormValues) {
@@ -275,21 +275,44 @@ function EditProfileDialog({
   const [name, setName] = useState(user.name);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // null until known; the password fields stay hidden if it can't be loaded.
+  const [passwordStatus, setPasswordStatus] = useState<PasswordStatus | null>(null);
+  const [passwords, setPasswords] = useState({ current: "", next: "", confirm: "" });
 
   // A real modal: focus stays inside, Esc closes, the page behind is inert.
   useEffect(() => {
     ref.current?.showModal();
+    apiFetch<PasswordStatus>("/api/auth/password")
+      .then(setPasswordStatus)
+      .catch(() => {});
   }, []);
+
+  const setPassword = (field: keyof typeof passwords) => (e: ChangeEvent<HTMLInputElement>) =>
+    setPasswords((p) => ({ ...p, [field]: e.target.value }));
 
   async function save(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) return setError("Please enter your name");
-    if (trimmed === user.name) return ref.current?.close();
+    // No "forgot password" exists, so a typo here would lock the person out.
+    if (passwords.next !== passwords.confirm) return setError("The new passwords don't match");
+    const changingPassword = passwords.next !== "";
+    if (trimmed === user.name && !changingPassword) return ref.current?.close();
     setSaving(true);
     setError("");
     try {
-      onSaved(await apiFetch<SessionUser>("/api/auth/me", { method: "PATCH", body: JSON.stringify({ name: trimmed }) }));
+      // Password first: it is the step that can be refused, and then nothing has changed yet.
+      if (changingPassword) {
+        await apiFetch("/api/auth/password", {
+          method: "POST",
+          body: JSON.stringify({ newPassword: passwords.next, currentPassword: passwords.current }),
+        });
+      }
+      onSaved(
+        trimmed === user.name
+          ? user
+          : await apiFetch<SessionUser>("/api/auth/me", { method: "PATCH", body: JSON.stringify({ name: trimmed }) })
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
       setSaving(false);
@@ -342,6 +365,56 @@ function EditProfileDialog({
           <input value={user.email} readOnly disabled className="input cursor-not-allowed opacity-70" />
           <span className="text-xs text-muted">Your email is your login, so it can&apos;t be changed.</span>
         </label>
+
+        {passwordStatus?.allowed && (
+          <fieldset className="flex flex-col gap-3 border-t border-border pt-4">
+            <legend className="flex items-center gap-1.5 pr-2 text-sm font-medium">
+              <KeyRound className="size-4 text-primary" aria-hidden />
+              {passwordStatus.hasPassword ? "Change password" : "Set a password"}
+            </legend>
+            <p className="text-xs text-muted">
+              {passwordStatus.hasPassword
+                ? "Leave these empty to keep your password."
+                : "You log in with Google. Add a password to also log in with your email."}
+            </p>
+            {passwordStatus.hasPassword && (
+              <label className="flex flex-col gap-1 text-sm">
+                Current password
+                <input
+                  type="password"
+                  value={passwords.current}
+                  onChange={setPassword("current")}
+                  required={passwords.next !== ""}
+                  autoComplete="current-password"
+                  className="input"
+                />
+              </label>
+            )}
+            <label className="flex flex-col gap-1 text-sm">
+              New password
+              <input
+                type="password"
+                value={passwords.next}
+                onChange={setPassword("next")}
+                minLength={LIMITS.PASSWORD_MIN}
+                placeholder={`At least ${LIMITS.PASSWORD_MIN} characters`}
+                autoComplete="new-password"
+                className="input"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              Confirm new password
+              <input
+                type="password"
+                value={passwords.confirm}
+                onChange={setPassword("confirm")}
+                required={passwords.next !== ""}
+                autoComplete="new-password"
+                className="input"
+              />
+            </label>
+          </fieldset>
+        )}
 
         <ErrorText message={error} />
 

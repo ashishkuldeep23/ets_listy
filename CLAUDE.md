@@ -64,6 +64,7 @@ src/
     folders/[id]/page.tsx    # one folder (components/FolderView.tsx)
     api/auth/signup|login|logout|me/route.ts  # me: GET, PATCH { name } (email can't change)
     api/auth/google/route.ts, google/callback/route.ts # Google login (state cookie, then session)
+    api/auth/password/route.ts # GET status, POST { newPassword, currentPassword? } (logged in; off when Google-only)
     api/folders/route.ts     # GET ?scope=mine|shared&status= (+ counts, perms, progress), POST create
     api/folders/[id]/route.ts # GET (+ canCheck/canEdit/canManage), PATCH, DELETE (+ its items)
     api/folders/[id]/reminder/route.ts           # GET, PUT { remindAt }, DELETE: MY reminder (any member)

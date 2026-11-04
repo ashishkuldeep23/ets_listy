@@ -10,6 +10,13 @@ export interface SessionUser {
   email: string;
 }
 
+/** GET /api/auth/password. */
+export interface PasswordStatus {
+  /** False when only Google login is on. */
+  allowed: boolean;
+  hasPassword: boolean;
+}
+
 /** A folder as the API returns it. */
 export interface FolderDTO {
   id: string;
