@@ -2,7 +2,9 @@ import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
 import type { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
+import type { GoogleProfile } from "@/lib/google";
 import { jsonError } from "@/lib/http";
+import { LIMITS } from "@/lib/limits";
 import { SESSION_COOKIE, SESSION_MAX_AGE, createSessionToken, verifySessionToken } from "@/lib/session";
 import { User } from "@/models/User";
 import type { SessionUser } from "@/types";
@@ -31,7 +33,7 @@ export function getDummyHash(): Promise<string> {
 }
 
 /** Reads one cookie from a plain Request (works in tests, unlike next/headers). */
-function readCookie(request: Request, name: string): string | null {
+export function readCookie(request: Request, name: string): string | null {
   const header = request.headers.get("cookie");
   if (!header) return null;
   for (const part of header.split(";")) {
@@ -80,4 +82,39 @@ export async function setSessionCookie(response: NextResponse, userId: string): 
 export function clearSessionCookie(response: NextResponse): NextResponse {
   response.cookies.set(SESSION_COOKIE, "", { ...cookieOptions, maxAge: 0 });
   return response;
+}
+
+/** Holds a Google login in progress: "<random state>.<encoded next path>". */
+export const GOOGLE_STATE_COOKIE = "listy_google_state";
+export const oauthCookieOptions = { ...cookieOptions, path: "/api/auth/google" } as const;
+
+/**
+ * The Listy account for a Google profile, or null if this email already
+ * belongs to a different Google account. Signup doesn't verify emails, so
+ * anyone could have registered this address with a password before its real
+ * owner came along. Google has now proven ownership, so linking removes that
+ * password: otherwise whoever set it could still get into the account.
+ */
+export async function findOrCreateGoogleUser({ sub, email, name }: GoogleProfile): Promise<string | null> {
+  await connectDB();
+  const linked = await User.findOne({ googleId: sub }).select("_id").lean();
+  if (linked) return String(linked._id);
+
+  const existing = await User.findOne({ email }).select("+googleId").lean();
+  if (existing) {
+    if (existing.googleId) return null;
+    await User.updateOne({ _id: existing._id }, { $set: { googleId: sub }, $unset: { passwordHash: 1 } });
+    return String(existing._id);
+  }
+  try {
+    const user = await User.create({ name: name.slice(0, LIMITS.USER_NAME_MAX), email, googleId: sub });
+    return String(user._id);
+  } catch (err) {
+    // A double click can send two first logins at once: the unique index stops the second.
+    if (typeof err === "object" && err !== null && "code" in err && err.code === 11000) {
+      const winner = await User.findOne({ googleId: sub }).select("_id").lean();
+      if (winner) return String(winner._id);
+    }
+    throw err;
+  }
 }

@@ -117,6 +117,28 @@ describe("refreshAllOffline", () => {
     expect(calls).toEqual([]);
   });
 
+  it("when turned off, drops an automatic copy once its queued changes are sent", async () => {
+    setAutoSave(false);
+    const snapshot = { name: "B", status: "active", items: [item("i")], toggleBase: "x", canEdit: true, auto: true } as const;
+    saveOfflineList({ ...snapshot, path: "/folders/b", items: [item("i")] }, NOW);
+    setOfflineTick("/folders/b", "i", { done: true, notFound: false });
+    await refreshAllOffline(NOW);
+    expect(getOfflineList("/folders/b")).not.toBeNull();
+
+    setOfflineTick("/folders/b", "i", { done: false, notFound: false });
+    await refreshAllOffline(NOW);
+    expect(getOfflineList("/folders/b")).toBeNull();
+  });
+
+  it("doesn't overwrite a copy with changes still queued", async () => {
+    saveOfflineList({ path: "/folders/f1", name: "A", status: "active", items: [item("a")], toggleBase: "x", canEdit: true }, new Date(0));
+    setOfflineTick("/folders/f1", "a", { done: true, notFound: false });
+    server([card("f1")]);
+    await refreshAllOffline(NOW);
+    expect(getOfflineList("/folders/f1")?.savedAt).toBe(new Date(0).toISOString());
+    expect(getOfflineList("/folders/f1")?.changes.ticks.a).toEqual({ done: true, notFound: false });
+  });
+
   it("never throws with no network", async () => {
     fakeServer(noNetwork);
     await expect(refreshAllOffline(NOW)).resolves.toBeUndefined();

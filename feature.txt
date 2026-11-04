@@ -33,21 +33,15 @@ Sirf phase me divide kro aur prompts folder me phase vise features banane ke liy
 ---------------------------------------->>>>>>>>>>>>>>>>>>
 
 
-
-
 Mai soch raha hu offline features ko extend krne ko, jish se ki user ish app me nayi lish bana sake, list me item add kr sake, item related feature ko use kr sake jaise delete edit and make done or not found.
 Aur bhi jo tumhe lagta hai ish appp ko analyise krke jo bhi offline feature hona chahiye usko bhi include develope kro, phle mujhe uno list dikho phir mai bata at hu kon sa bana na hai.
-
-
 
 
 
 aur ek chij fix kro jb bhi user kisi bhi item name pr click kre to user completed ka mark kr do, abhi sirf checklist pr click krne se hota hai ab dono se hona chahiye.
 
 
-
------------------------------------------------->>>>>>>>>>>>>>>>>
-
+-------------------------------------->>>>>>>>>>>>>>>>>
 
 
 
@@ -73,3 +67,59 @@ aur ek chij fix kro jb bhi user kisi bhi item name pr click kre to user complete
 
 
 
+
+
+
+
+Do this ( need to set these envs before starting up ) ----------------------------->>>>>
+
+Variable	Kahan se milega
+GOOGLE_CLIENT_ID	Google Console
+GOOGLE_CLIENT_SECRET	Google Console
+ONLY_LOGIN_WITH_GOOGLE	Khud likhna hai: true ya false
+NEXT_PUBLIC_VAPID_PUBLIC_KEY	Command se generate
+VAPID_PRIVATE_KEY	Usi command se generate
+VAPID_SUBJECT	Khud likhna hai: apna email
+CRON_SECRET	Command se generate
+
+
+2. ONLY_LOGIN_WITH_GOOGLE
+Testing ke liye false rakhein, taaki Google setup mein gadbad hone par bhi aap password se login kar sako. Google login chal jaye, tab true karein.
+
+3. VAPID keys
+Project folder mein yeh chalayein:
+
+
+npx web-push generate-vapid-keys
+Output mein do keys aayengi:
+
+Public Key ko NEXT_PUBLIC_VAPID_PUBLIC_KEY mein daalein.
+Private Key ko VAPID_PRIVATE_KEY mein daalein.
+Yeh command sirf ek baar chalani hai. Local aur production mein same keys rakhna sabse simple hai, ya production ke liye alag pair bana lein. Production ki keys baad mein badalne par users ko reminder dobara set karna padega.
+
+4. VAPID_SUBJECT
+Yeh koi secret nahi hai, bas contact address hai. Aage mailto: lagakar apna email likhein:
+
+
+VAPID_SUBJECT=mailto:aapka-email@example.com
+5. CRON_SECRET
+Yeh aapka banaya hua password hai, kisi website se nahi milta:
+
+
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+Output CRON_SECRET mein daalein. Scheduler (jaise cron-job.org) mein bhi yahi value is header mein jayegi:
+
+
+Authorization: Bearer <CRON_SECRET>
+Final .env.local
+Yeh values .env.local mein daalein, .env.example mein nahi, kyunki .env.example git mein commit hoti hai. Yeh sab purani values ke neeche add karein:
+
+
+GOOGLE_CLIENT_ID=xxxx.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=GOCSPX-xxxx
+ONLY_LOGIN_WITH_GOOGLE=false
+
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=<public key>
+VAPID_PRIVATE_KEY=<private key>
+VAPID_SUBJECT=mailto:aapka-email@example.com
+CRON_SECRET=<generated secret>

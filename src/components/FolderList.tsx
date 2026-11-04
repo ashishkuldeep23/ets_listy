@@ -11,7 +11,8 @@
 // OfflineListView), since their own pages may not be cached; others can't
 // be opened. New lists can be made offline, and my lists renamed, given a
 // status or deleted; all of it is sent when back online (lib/offlineSync.ts).
-// Lists made offline show "Not synced yet" until then.
+// Online too, these changes are queued the same way: they show at once and
+// go out in the background, so the page never waits for the server.
 // "Keep all lists offline" (on by default, lib/offlineAuto.ts) keeps a copy
 // of every list, so all of them open offline.
 
@@ -60,7 +61,8 @@ import {
   updateOfflineListInfo,
   type OfflineList,
 } from "@/lib/offlineLists";
-import { cachePageForOffline, isPageCached, OFFLINE_SYNCED_EVENT, type OfflineSyncedDetail } from "@/lib/offlineSync";
+import { whenOfflineReady } from "@/lib/offlineStore";
+import { cachePageForOffline, isPageCached, OFFLINE_SYNCED_EVENT, requestSyncNow, type OfflineSyncedDetail } from "@/lib/offlineSync";
 import ProgressBar from "@/components/ProgressBar";
 import StatusBadge from "@/components/StatusBadge";
 import type {
@@ -246,11 +248,18 @@ export default function FolderList() {
         params.set("list", path);
         pushParams(params, true);
       }
+      // A new list stops being a local card now: keep its card until the reload brings the real one.
+      const created = from && tab === "mine" ? getOfflineList(path) : null;
+      if (created) {
+        const id = path.slice("/folders/".length);
+        const { folder } = localCard(created);
+        setData((prev) => prev && { ...prev, folders: [{ ...folder, id }, ...prev.folders.filter((f) => f.id !== id)] });
+      }
       refresh();
     };
     window.addEventListener(OFFLINE_SYNCED_EVENT, onSync);
     return () => window.removeEventListener(OFFLINE_SYNCED_EVENT, onSync);
-  }, [refresh]);
+  }, [refresh, tab]);
 
   // Online, a saved list opens on its own page (live, with everything); only lists made offline stay here.
   useEffect(() => {
@@ -267,20 +276,6 @@ export default function FolderList() {
   const setFilter = (value: Filter) => setParam("status", value === "all" ? null : value);
   const setTab = (value: FolderScope) => setParam("tab", value === "mine" ? null : value);
 
-  // Wraps a change: clears the old error, runs it, reloads so counts stay
-  // right; returns true on success.
-  async function mutate(fn: () => Promise<unknown>): Promise<boolean> {
-    setError("");
-    try {
-      await fn();
-      show(await fetchFolders());
-      return true;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-      return false;
-    }
-  }
-
   // Nothing is read from storage on the server or while hydrating.
   const localLists = offlineVersion < 0 ? [] : listOfflineLists().filter((l) => l.created);
   const serverFolders = offline ? (offlineVersion < 0 ? null : getCachedFolders(tab)?.folders ?? null) : (data?.folders ?? null);
@@ -294,7 +289,8 @@ export default function FolderList() {
   ];
   const autoOn = offlineVersion >= 0 && isAutoSaveOn();
   const visible = filter === "all" ? cards : cards.filter((c) => c.folder.status === filter);
-  const counts = offline || localLists.length > 0 ? countByStatus(cards.map((c) => c.folder)) : (data?.counts ?? null);
+  // Counted from the cards (every folder in this tab), so queued changes count at once.
+  const counts = serverFolders || localLists.length > 0 ? countByStatus(cards.map((c) => c.folder)) : null;
 
   /** True if another list on "My lists" has this name (any case, like the server). Only my own lists are renamed / created. */
   const nameTaken = (typed: string, exceptId?: string) =>
@@ -303,21 +299,30 @@ export default function FolderList() {
   async function createFolder(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!name.trim()) return;
-    if (offline) {
-      if (nameTaken(name)) return setError(`A list named "${name.trim()}" already exists`);
-      setError("");
-      createOfflineList(name);
-      setName("");
-      return;
-    }
-    const ok = await mutate(() => apiFetch("/api/folders", { method: "POST", body: JSON.stringify({ name }) }));
-    if (ok) setName("");
+    if (nameTaken(name)) return setError(`A list named "${name.trim()}" already exists`);
+    setError("");
+    const typed = name;
+    setName("");
+    // Queued writes need the stored data to be read first.
+    await whenOfflineReady();
+    createOfflineList(typed);
+    requestSyncNow();
+  }
+
+  // Sending a change drops it from the queue: `data` must already show it by then.
+  function patchFolder(id: string, changes: Partial<Pick<FolderDTO, "name" | "status">> | null) {
+    setData(
+      (prev) =>
+        prev && {
+          ...prev,
+          folders: changes
+            ? prev.folders.map((f) => (f.id === id ? { ...f, ...changes } : f))
+            : prev.folders.filter((f) => f.id !== id),
+        }
+    );
   }
 
   async function updateFolder({ folder, local }: Card, changes: Partial<Pick<FolderDTO, "name" | "status">>) {
-    if (!offline && !local) {
-      return mutate(() => apiFetch(`/api/folders/${folder.id}`, { method: "PATCH", body: JSON.stringify(changes) }));
-    }
     if (changes.name !== undefined) {
       if (!changes.name.trim()) return false;
       if (nameTaken(changes.name, folder.id)) {
@@ -333,7 +338,9 @@ export default function FolderList() {
     } else {
       queueFolderChange(folder.id, changes);
       updateOfflineListInfo(`/folders/${folder.id}`, changes);
+      patchFolder(folder.id, changes);
     }
+    requestSyncNow();
     return true;
   }
 
@@ -341,13 +348,13 @@ export default function FolderList() {
     if (local) {
       if (!confirm(`Delete "${local.name}"? It was made offline and isn't saved anywhere else.`)) return;
       removeOfflineList(local.path);
-    } else if (offline) {
-      if (!confirm(`Delete "${folder.name}"? It will be deleted when you're back online.`)) return;
+    } else {
+      const warning = offline ? "It will be deleted when you're back online." : "This cannot be undone.";
+      if (!confirm(`Delete "${folder.name}"? ${warning}`)) return;
       queueFolderChange(folder.id, { deleted: true });
       removeOfflineList(`/folders/${folder.id}`);
-    } else {
-      if (!confirm(`Delete "${folder.name}"? This cannot be undone.`)) return;
-      mutate(() => apiFetch(`/api/folders/${folder.id}`, { method: "DELETE" }));
+      patchFolder(folder.id, null);
+      requestSyncNow();
     }
   }
 
@@ -481,6 +488,7 @@ export default function FolderList() {
             // Offline (or not on the server yet): open the saved copy here; nothing to open without one.
             open={offline || card.local ? (card.offlinePath ? () => setParam("list", card.offlinePath) : null) : undefined}
             local={card.local !== null}
+            offline={offline}
             syncError={card.local?.syncError ?? null}
           />
         ))}
@@ -497,10 +505,11 @@ interface FolderCardProps {
   open?: (() => void) | null;
   /** Made offline and not on the server yet. */
   local?: boolean;
+  offline?: boolean;
   syncError?: string | null;
 }
 
-function FolderCard({ folder, onUpdate, onDelete, open, local = false, syncError = null }: FolderCardProps) {
+function FolderCard({ folder, onUpdate, onDelete, open, local = false, offline = false, syncError = null }: FolderCardProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(folder.name);
 
@@ -575,7 +584,7 @@ function FolderCard({ folder, onUpdate, onDelete, open, local = false, syncError
       {local && (
         <span className="flex items-center gap-1 text-xs text-primary">
           <CloudUpload className="size-3.5" aria-hidden />
-          Not synced yet
+          {offline ? "Not synced yet" : "Saving…"}
         </span>
       )}
       {syncError && <ErrorText message={syncError} />}

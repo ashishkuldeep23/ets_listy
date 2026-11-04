@@ -33,12 +33,20 @@ npm run build   # production build (type-checks too): run before calling work do
 
 Setup: copy `.env.example` to `.env.local` and set `MONGODB_URI` and
 `SESSION_SECRET`. The four Pusher vars are optional: without them the app
-works with no live updates.
+works with no live updates. `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` add
+Google login; `ONLY_LOGIN_WITH_GOOGLE=true` turns password login and signup off.
+Reminder notifications need the three `VAPID` vars, `CRON_SECRET`, a production
+build (the service worker) and a scheduler calling `/api/cron/reminders` every minute.
 
 Offline: `public/sw.js` (service worker, production only) caches pages and,
 via `public/sw-sync.js`, sends offline changes with Background Sync when no
 tab is open. `sw-sync.js` is plain JS that repeats `syncAllOffline()` in
 `src/lib/offlineSync.ts`: change both together (tests: `src/lib/swSync.test.ts`).
+
+Instant UI: list and item changes on `FolderView`/`FolderList` are never awaited.
+They go into the offline store first (same queue as offline use), then
+`requestSyncNow()` makes `OfflineStatus` send them in the background. Failures stay
+queued and retry; refusals are undone and shown in the header pill.
 
 Feature prompts for upcoming work live in `prompts/` (start with
 `prompts/README.md` and `prompts/_common.md`).
@@ -55,8 +63,12 @@ src/
     login/, signup/          # auth pages (use components/AuthForm.tsx)
     folders/[id]/page.tsx    # one folder (components/FolderView.tsx)
     api/auth/signup|login|logout|me/route.ts  # me: GET, PATCH { name } (email can't change)
+    api/auth/google/route.ts, google/callback/route.ts # Google login (state cookie, then session)
     api/folders/route.ts     # GET ?scope=mine|shared&status= (+ counts, perms, progress), POST create
     api/folders/[id]/route.ts # GET (+ canCheck/canEdit/canManage), PATCH, DELETE (+ its items)
+    api/folders/[id]/reminder/route.ts           # GET, PUT { remindAt }, DELETE: MY reminder (any member)
+    api/push/subscription/route.ts               # POST, DELETE { endpoint }: this device's notifications
+    api/cron/reminders/route.ts                  # GET: sends due reminders (Bearer CRON_SECRET, not a user)
     api/folders/[id]/items/route.ts              # GET items + counts, POST (canEdit)
     api/folders/[id]/items/[itemId]/route.ts     # PATCH, DELETE (canEdit)
     api/folders/[id]/items/[itemId]/toggle/route.ts # POST { done } (canCheck)
@@ -81,10 +93,11 @@ src/
   components/
     Header.tsx               # top bar: avatar + first name (→ profile), Logout, ChatToasts
     Avatar.tsx               # round initial "logo" (+ initialOf, firstNameOf)
+    ReminderButton.tsx       # clock button + popup on a list: set / remove my reminder, add to calendar
     ListChat.tsx             # bottom-right chat button + panel on a list (members + guests), presence heartbeat
     ChatToasts.tsx           # toasts for new messages in my lists, except on that list's own page
     ViewersButton.tsx        # "N viewing" pill; tap → who is here (name + email for members, guests "Anonymous")
-    AuthForm.tsx             # shared login/signup form
+    AuthForm.tsx             # shared login/signup form (AuthPage.tsx: server part, reads the env)
     FolderList.tsx           # home: tabs My folders / Shared with me (?tab=shared), status chips, "Keep all lists offline";
                              #   offline: cached cards, new lists, rename/status/delete queued, ?list= opens a copy in place
     FolderView.tsx           # folder page body
@@ -120,6 +133,11 @@ src/
   lib/
     db.ts          # cached Mongoose connection: always use connectDB()
     session.ts     # sign/verify session JWT (jose); no DB, used by proxy.ts
+    google.ts      # Google login URLs + ID token check, isGoogleOnly(), isGoogleConfigured()
+    reminders.ts   # sendDueReminders(): Web Push, checks access at send time
+    pushClient.ts  # browser: enablePush() (permission + subscribe), disablePush() on logout
+    pushValidators.ts # reminder + push subscription bodies; endpoints limited to known push services (SSRF)
+    calendar.ts    # googleCalendarUrl(), icsContent(), toDateTimeLocal()
     auth.ts        # hashPassword, getSessionUser, requireUser, session cookie
     access.ts      # getFolderAccess() (one folder) + sharedWithUser() (bulk): the ONLY permission logic
     shares.ts      # listShares(), getShareLink(), serializeShareLink() for the owner view;
@@ -159,6 +177,8 @@ src/
     SavedItem.ts   # private per user; unique owner+nameKey+categoryKey (case-insensitive)
     Share.ts       # folder + sharedWith (unique), canCheck/canEdit; normalize/mergePermissions()
     ShareLink.ts   # one per folder; random 32-char token (newShareToken), enabled flag
+    Reminder.ts    # one per user + list; sentAt null until sent
+    PushSubscription.ts # a device that gets my notifications; endpoint unique, moves to whoever logs in there
     ChatMessage.ts # list chat message; authorKey (never sent) marks "mine"; deleted with the folder
   test/
     setup.ts       # setupTestDb(), makeRequest(), routeCtx(), json<T>(), createUserAndCookie()
@@ -234,7 +254,7 @@ src/
    data. React escapes text by default, so keep it that way.
 6. **Limit sizes** of every string and array (see `lib/limits.ts`). User text
    used in a `$regex` must go through `escapeRegex()` first.
-7. **Every API route except `/api/auth/*` and the guest share routes (`GET /api/share/[token]`, its tick route, and `/api/share/[token]/presence|chat`) starts with `requireUser(request)`**
+7. **Every API route except `/api/auth/*`, `/api/cron/*` (checks `CRON_SECRET` instead) and the guest share routes (`GET /api/share/[token]`, its tick route, and `/api/share/[token]/presence|chat`) starts with `requireUser(request)`**
    and scopes its queries to that user. `src/proxy.ts` only redirects pages;
    it is not an API guard. The one public data route, `GET /api/share/[token]`,
    is read-only, needs an enabled share link, is rate-limited, and returns

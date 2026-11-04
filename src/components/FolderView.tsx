@@ -9,8 +9,11 @@
 // do (tick / edit / manage) comes from the API, not guessed here.
 // Live: listens on the folder's Pusher channel, so changes made by anyone
 // else show up without a refresh. The server is still the source of truth.
+// Instant: my item changes go into the list's local copy first (lib/offlineLists.ts)
+// and show at once; OfflineStatus sends them in the background and retries
+// failures. What the server refuses is undone and reported in the header.
 // Offline: if the list was saved with "Save offline", shows that copy
-// (OfflineListView); SaveOfflineButton sends its ticks once back online.
+// (OfflineListView).
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -37,6 +40,7 @@ import ListChat from "@/components/ListChat";
 import ViewersButton from "@/components/ViewersButton";
 import OfflineListView from "@/components/OfflineListView";
 import ProgressBar from "@/components/ProgressBar";
+import ReminderButton from "@/components/ReminderButton";
 import SaveOfflineButton from "@/components/SaveOfflineButton";
 import SavedItemPicker from "@/components/SavedItemPicker";
 import SharePanel from "@/components/SharePanel";
@@ -49,8 +53,22 @@ import { ApiError, apiFetch } from "@/lib/apiClient";
 import { EVENTS, folderChannel } from "@/lib/channels";
 import { formatRupees } from "@/lib/format";
 import { useOfflineVersion } from "@/hooks/useOfflineVersion";
-import { getOfflineList } from "@/lib/offlineLists";
+import {
+  addOfflineItem,
+  deleteOfflineItem,
+  editOfflineItem,
+  getOfflineList,
+  itemFields,
+  itemsWithPending,
+  renameOfflineGroup,
+  saveOfflineList,
+  setOfflineTick,
+  type OfflineItemFields,
+  type OfflineList,
+  type OfflineTick,
+} from "@/lib/offlineLists";
 import { whenOfflineReady } from "@/lib/offlineStore";
+import { requestSyncNow } from "@/lib/offlineSync";
 import { computeTotals, groupItems } from "@/lib/totals";
 import type {
   FolderDTO,
@@ -58,13 +76,15 @@ import type {
   GroupRenamedEvent,
   ItemDTO,
   ItemListResponse,
-  RenameGroupResponse,
+  Result,
   SavedItemDTO,
   SessionUser,
 } from "@/types";
 
 // "offline": the load failed for lack of network and there is a saved copy to show.
 type LoadState = "loading" | "ready" | "notFound" | "error" | "offline";
+
+const LOAD_TRIES = 3;
 
 /** Same identity as the server uses for saved items: name + category, any case. */
 const savedKey = (name: string, category: string | null) =>
@@ -91,7 +111,8 @@ export default function FolderView() {
   const router = useRouter();
   const online = useOnline();
   // Re-render once the offline store has been read (it may hold a copy of this list).
-  const offlineReady = useOfflineVersion() >= 0;
+  const offlineVersion = useOfflineVersion();
+  const offlineReady = offlineVersion >= 0;
   const path = `/folders/${id}`;
   // Bumped to load again while the offline copy is showing.
   const [attempt, setAttempt] = useState(0);
@@ -112,10 +133,29 @@ export default function FolderView() {
   const { savedItems, reload: reloadSaved } = useSavedItems("");
   const savedKeys = useMemo(() => new Set(savedItems.map((s) => savedKey(s.name, s.category))), [savedItems]);
 
-  const loadAll = useCallback(() => {
+  // A background send can finish while this loads, making the answer older than the
+  // copy; saving it would drop queued ticks and edits of the new item. So load again.
+  const loadAll = useCallback(async () => {
     const base = `/api/folders/${encodeURIComponent(id)}`;
-    return Promise.all([apiFetch<FolderDetailDTO>(base), apiFetch<ItemListResponse>(`${base}/items`)]);
-  }, [id]);
+    await whenOfflineReady();
+    const copyItems = () => JSON.stringify(getOfflineList(path)?.items ?? null);
+    for (let tries = 1; ; tries++) {
+      const before = copyItems();
+      const loaded = await Promise.all([apiFetch<FolderDetailDTO>(base), apiFetch<ItemListResponse>(`${base}/items`)]);
+      if (tries === LOAD_TRIES || copyItems() === before) return loaded;
+    }
+  }, [id, path]);
+
+  // A background send updated the copy (or another tab did): this state follows, so
+  // saving it back into the copy can't undo that. Equal data keeps the old array, which ends the loop.
+  useEffect(() => {
+    if (!offlineReady) return;
+    const kept = getOfflineList(path)?.items;
+    // In an effect on purpose: SaveOfflineButton's effect (a child, so it runs first) has saved any
+    // newer state by now. A store listener could run before that and bring back older items.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (kept) setItems((prev) => (JSON.stringify(prev) === JSON.stringify(kept) ? prev : kept));
+  }, [offlineVersion, offlineReady, path]);
 
   // Runs again when the connection comes back (or on a retry from the offline view).
   useEffect(() => {
@@ -236,10 +276,32 @@ export default function FolderView() {
   }
 
   const itemsUrl = `/api/folders/${folder.id}/items`;
+  // What to show: the server's items with my unsent changes on top.
+  const copy = offlineReady ? getOfflineList(path) : null;
+  const shown = copy ? itemsWithPending(copy) : items;
   // Group suggestions come from the items themselves, so a group disappears once its last item does.
-  const groups = [...new Set(items.flatMap((i) => (i.group ? [i.group] : [])))].sort((a, b) => a.localeCompare(b));
-  const replaceItem = (updated: ItemDTO) => setItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+  const groups = [...new Set(shown.flatMap((i) => (i.group ? [i.group] : [])))].sort((a, b) => a.localeCompare(b));
 
+  // Changes are queued on the copy, so one must exist even with "Keep all lists offline" off.
+  const ensureCopy = () => {
+    if (getOfflineList(path)) return;
+    saveOfflineList({
+      path,
+      name: folder.name,
+      status: folder.status,
+      items,
+      toggleBase: folder.canCheck ? itemsUrl : null,
+      canEdit: folder.canEdit,
+      auto: true,
+    });
+  };
+
+  // Shows why a change wasn't queued; otherwise sends it now. True if queued (so a form can reset).
+  const queued = (result: Result<unknown>): boolean => {
+    setError(result.ok ? "" : result.error);
+    if (result.ok) requestSyncNow();
+    return result.ok;
+  };
 
   // Runs a request and shows its error message; returns true on success.
   async function run(fn: () => Promise<void>): Promise<boolean> {
@@ -256,13 +318,27 @@ export default function FolderView() {
   // The bookmark only reflects the server; a failed reload just leaves it as it was.
   const refreshSaved = () => reloadSaved().catch(() => {});
 
-  const addItem = (values: ItemFormValues) =>
+  // Bookmark on an item: copy it into MY saved items (works on lists shared with me too).
+  // Group is left out: it belongs to this list.
+  const saveToProfile = (item: OfflineItemFields) =>
     run(async () => {
-      const item = await apiFetch<ItemDTO>(itemsUrl, { method: "POST", body: JSON.stringify(values) });
-      setItems((prev) => [...prev, item]);
-      setPrefill(null);
-      if (values.saveToProfile) void refreshSaved();
+      const { name, category, price, priceUnit, quantity, description } = item;
+      await apiFetch("/api/saved-items", {
+        method: "POST",
+        body: JSON.stringify({ name, category, price, priceUnit, quantity, description }),
+      });
+      await refreshSaved();
     });
+
+  const addItem = async (values: ItemFormValues) => {
+    ensureCopy();
+    const ok = queued(addOfflineItem(path, itemFields(values)));
+    if (ok) {
+      setPrefill(null);
+      if (values.saveToProfile) void saveToProfile(values);
+    }
+    return ok;
+  };
 
   // "Add" in the saved-items panel: copy the saved item into this folder as-is.
   const addFromSaved = (saved: SavedItemDTO, group: string | null) =>
@@ -276,73 +352,42 @@ export default function FolderView() {
       group,
     });
 
-  // Bookmark on an item: copy it into MY saved items (works on lists shared with me too).
-  // Group is left out: it belongs to this list.
-  const saveToProfile = (item: ItemDTO) =>
-    run(async () => {
-      const { name, category, price, priceUnit, quantity, description } = item;
-      await apiFetch("/api/saved-items", {
-        method: "POST",
-        body: JSON.stringify({ name, category, price, priceUnit, quantity, description }),
-      });
-      await refreshSaved();
-    });
+  const saveItem = async (item: ItemDTO, values: ItemFormValues) => {
+    ensureCopy();
+    return queued(editOfflineItem(path, item.id, itemFields(values)));
+  };
 
-  const saveItem = (item: ItemDTO, values: ItemFormValues) =>
-    run(async () => {
-      const updated = await apiFetch<ItemDTO>(`${itemsUrl}/${item.id}`, { method: "PATCH", body: JSON.stringify(values) });
-      replaceItem(updated);
-    });
-
-  // Renames a group on the server, then mirrors it locally (no refetch needed).
-  // `from: null` names the "Ungrouped" items: they all move into group `typed`.
-  const renameGroup = (from: string | null, typed: string | null) =>
-    run(async () => {
-      if (from === null && !typed) throw new Error("Enter a group name");
-      // Renaming onto another group in a different case merges into it (the server does the same).
-      const to = typed && (groups.find((g) => g !== from && g.toLowerCase() === typed.toLowerCase()) ?? typed);
-      const res = await apiFetch<RenameGroupResponse>(`/api/folders/${folder.id}/groups/rename`, {
-        method: "POST",
-        body: JSON.stringify({ from, to }),
-      });
-      setItems((prev) => applyGroupRename(prev, { from, to, itemIds: res.itemIds }));
-      // Nothing was ungrouped on the server any more (e.g. grouped from another screen
-      // without live updates): reload so this screen stops showing stale items.
-      if (from === null && res.updated === 0) refetch();
-    });
+  // `from: null` names the "Ungrouped" items: they all move into group `to`.
+  const renameGroup = async (from: string | null, to: string | null) => {
+    ensureCopy();
+    return queued(renameOfflineGroup(path, from, to));
+  };
 
   // The server moves the list to "completed" once every item is done; mirror
   // it here so it shows at once, even without live updates.
-  function completeIfAllDone(next: ItemDTO[]) {
+  function completeIfAllDone(list: OfflineList | null) {
+    const next = list ? itemsWithPending(list) : [];
     if (next.length === 0 || !next.every((i) => i.done)) return;
     setFolder((prev) => (prev && prev.status !== "completed" ? { ...prev, status: "completed" } : prev));
   }
 
-  // Optimistic: show the new state at once, then undo it if the server says no.
-  async function setItemDone(item: ItemDTO, done: boolean, notFound = false) {
-    replaceItem({ ...item, done, notFound });
-    const ok = await run(async () => {
-      const updated = await apiFetch<ItemDTO>(`${itemsUrl}/${item.id}/toggle`, {
-        method: "POST",
-        body: JSON.stringify(notFound ? { done, notFound } : { done }),
-      });
-      replaceItem(updated);
-      completeIfAllDone(items.map((i) => (i.id === updated.id ? updated : i)));
-    });
-    if (!ok) replaceItem(item);
-  }
+  const setTick = (item: ItemDTO, tick: OfflineTick) => {
+    ensureCopy();
+    setError("");
+    completeIfAllDone(setOfflineTick(path, item.id, tick));
+    requestSyncNow();
+  };
 
   // Ticking a "not found" item marks it found (done), not undone.
-  const toggleItem = (item: ItemDTO) => setItemDone(item, item.notFound || !item.done);
-  const toggleNotFound = (item: ItemDTO) => setItemDone(item, !item.notFound, !item.notFound);
+  const toggleItem = (item: ItemDTO) => setTick(item, { done: item.notFound || !item.done, notFound: false });
+  const toggleNotFound = (item: ItemDTO) => setTick(item, { done: !item.notFound, notFound: !item.notFound });
 
-  async function deleteItem(item: ItemDTO) {
+  function deleteItem(item: ItemDTO) {
     if (!confirm(`Delete "${item.name}"?`)) return;
-    await run(async () => {
-      await apiFetch(`${itemsUrl}/${item.id}`, { method: "DELETE" });
-      setItems((prev) => prev.filter((i) => i.id !== item.id));
-      completeIfAllDone(items.filter((i) => i.id !== item.id));
-    });
+    ensureCopy();
+    setError("");
+    completeIfAllDone(deleteOfflineItem(path, item.id));
+    requestSyncNow();
   }
 
   // A shared user removes their own access ("Leave list").
@@ -355,9 +400,9 @@ export default function FolderView() {
     if (ok) router.replace("/?tab=shared");
   }
 
-  const doneCount = items.filter((i) => i.done).length;
-  const totals = computeTotals(items);
-  const sections = groupItems(items);
+  const doneCount = shown.filter((i) => i.done).length;
+  const totals = computeTotals(shown);
+  const sections = groupItems(shown);
 
   return (
     // Bottom padding keeps the last card clear of the chat button.
@@ -371,6 +416,7 @@ export default function FolderView() {
         <StatusBadge status={folder.status} />
         <div className="ml-auto flex gap-2">
           <ViewersButton people={presence.people} />
+          <ReminderButton folderId={folder.id} listName={folder.name} />
           <SaveOfflineButton
             path={path}
             name={folder.name}
@@ -404,7 +450,7 @@ export default function FolderView() {
         </div>
       )}
       <div className="mt-2 mb-6">
-        <ProgressBar done={doneCount} total={items.length} />
+        <ProgressBar done={doneCount} total={shown.length} />
       </div>
 
       {showShare && <SharePanel folderId={folder.id} onClose={() => setShowShare(false)} />}
@@ -443,7 +489,7 @@ export default function FolderView() {
 
       <ErrorText message={error} className="mb-4" />
 
-      {items.length === 0 ? (
+      {shown.length === 0 ? (
         <div className="card flex animate-fade-up flex-col items-center gap-3 py-10 text-center text-muted">
           <ShoppingBasket className="size-10 animate-float text-primary/70" aria-hidden />
           <p>No items yet.{folder.canEdit && " Add your first one above."}</p>
@@ -462,7 +508,9 @@ export default function FolderView() {
             >
               {sectionItems.map((item) => (
                 <ItemRow
-                  key={item.id}
+                  // Not the id: a new item's id changes once it reaches the server, and that
+                  // must not remount the row. Names are unique within a list.
+                  key={item.name.trim().toLowerCase()}
                   item={item}
                   groups={groups}
                   canCheck={folder.canCheck}

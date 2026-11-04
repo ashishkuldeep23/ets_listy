@@ -9,16 +9,27 @@
 
 import { useEffect, useState } from "react";
 import { CloudUpload, TriangleAlert, X } from "lucide-react";
+import { useOnline } from "@/hooks/useOnline";
 import { useOfflineVersion } from "@/hooks/useOfflineVersion";
 import { refreshAllOffline } from "@/lib/offlineAuto";
 import { clearSyncProblems, getSyncProblems } from "@/lib/offlineLists";
-import { hasChangesToSync, pendingChangeCount, requestBackgroundSync, SYNC_MESSAGE, syncAllOffline } from "@/lib/offlineSync";
+import {
+  hasChangesToSync,
+  pendingChangeCount,
+  requestBackgroundSync,
+  SYNC_MESSAGE,
+  SYNC_NOW_EVENT,
+  syncAllOffline,
+  syncLatest,
+} from "@/lib/offlineSync";
 
 const SYNC_RETRY_MS = 15_000;
+const SHOW_WAITING_AFTER_MS = 3_000;
 
 /** `loggedIn`: true only once the current user is known; until then only share-link ticks are sent. */
 export default function OfflineStatus({ loggedIn }: { loggedIn: boolean }) {
   const version = useOfflineVersion();
+  const online = useOnline();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -28,15 +39,21 @@ export default function OfflineStatus({ loggedIn }: { loggedIn: boolean }) {
       // Copies are refreshed after my changes went out, so they include them. Throttled inside.
       if (loggedIn) void sending.then(() => refreshAllOffline());
     };
+    // A change was just made: send it at once, even if a sync is running.
+    const syncNow = () => {
+      if (navigator.onLine && hasChangesToSync(loggedIn)) syncLatest(loggedIn);
+    };
     sync();
     const timer = setInterval(sync, SYNC_RETRY_MS);
     window.addEventListener("online", sync);
+    window.addEventListener(SYNC_NOW_EVENT, syncNow);
     // The service worker leaves the sync to an open page.
     const onMessage = (e: MessageEvent) => e.data === SYNC_MESSAGE && sync();
     navigator.serviceWorker?.addEventListener("message", onMessage);
     return () => {
       clearInterval(timer);
       window.removeEventListener("online", sync);
+      window.removeEventListener(SYNC_NOW_EVENT, syncNow);
       navigator.serviceWorker?.removeEventListener("message", onMessage);
     };
   }, [loggedIn]);
@@ -48,16 +65,27 @@ export default function OfflineStatus({ loggedIn }: { loggedIn: boolean }) {
     if (hasWaiting) void requestBackgroundSync();
   }, [hasWaiting, version]);
 
+  // Online, a change is normally sent within a moment: only say so if it takes a while.
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (!hasWaiting) return;
+    const timer = setTimeout(() => setSlow(true), SHOW_WAITING_AFTER_MS);
+    return () => {
+      clearTimeout(timer);
+      setSlow(false);
+    };
+  }, [hasWaiting]);
+
   // Nothing is read from storage on the server or while hydrating.
   if (version < 0) return null;
   const waiting = pendingChangeCount();
   const problems = getSyncProblems();
-  if (waiting === 0 && problems.length === 0) return null;
+  if ((waiting === 0 || (online && !slow)) && problems.length === 0) return null;
 
   const label =
     problems.length > 0
-      ? `${problems.length} offline ${problems.length === 1 ? "change" : "changes"} not saved`
-      : `${waiting} offline ${waiting === 1 ? "change" : "changes"} waiting to sync`;
+      ? `${problems.length} ${problems.length === 1 ? "change" : "changes"} not saved`
+      : `${waiting} ${waiting === 1 ? "change" : "changes"} waiting to sync`;
 
   return (
     <div className="relative">
@@ -82,8 +110,8 @@ export default function OfflineStatus({ loggedIn }: { loggedIn: boolean }) {
           <div className="mb-2 flex items-start justify-between gap-2">
             <p className="text-muted">
               {waiting > 0
-                ? `${waiting} ${waiting === 1 ? "change" : "changes"} made offline will be sent when you're online.`
-                : "All offline changes were sent."}
+                ? `${waiting} ${waiting === 1 ? "change" : "changes"} will be sent as soon as the connection works.`
+                : "All other changes were sent."}
             </p>
             <button onClick={() => setOpen(false)} className="btn-ghost p-0.5" title="Close">
               <X className="size-4" aria-hidden />

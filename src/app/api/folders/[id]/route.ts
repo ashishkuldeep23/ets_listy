@@ -5,6 +5,7 @@ import { jsonError, readJson, serverError } from "@/lib/http";
 import { Folder, serializeFolder } from "@/models/Folder";
 import { ChatMessage } from "@/models/ChatMessage";
 import { Item } from "@/models/Item";
+import { Reminder } from "@/models/Reminder";
 import { Share } from "@/models/Share";
 import { ShareLink } from "@/models/ShareLink";
 import { folderAudience, getSocketId, publishFolderEvent, publishUserEvent } from "@/lib/realtime";
@@ -90,6 +91,7 @@ export async function DELETE(request: Request, ctx: Ctx): Promise<Response> {
     await Share.deleteMany({ folder: access.folder._id });
     await ShareLink.deleteMany({ folder: access.folder._id });
     await ChatMessage.deleteMany({ folder: access.folder._id });
+    await Reminder.deleteMany({ folder: access.folder._id });
     await Folder.deleteOne({ _id: access.folder._id });
     await publishFolderEvent(id, EVENTS.folderDeleted, { folderId: id }, getSocketId(request));
     const gone: FolderProgressEvent = { folderId: id, itemCount: 0, doneCount: 0, deleted: true };

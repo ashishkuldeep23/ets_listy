@@ -4,10 +4,13 @@ import { User } from "@/models/User";
 import { validateSignup } from "@/lib/validators";
 import { jsonError, readJson, serverError, tooManyRequests } from "@/lib/http";
 import { hashPassword, setSessionCookie } from "@/lib/auth";
+import { isGoogleOnly } from "@/lib/google";
 import { getClientIp, rateLimit } from "@/lib/rateLimit";
 
 // POST /api/auth/signup: { name, email, password } → creates the user and logs them in.
 export async function POST(request: Request): Promise<Response> {
+  if (isGoogleOnly()) return jsonError("Please sign up with Google", 403);
+
   const limit = rateLimit(`signup:${getClientIp(request)}`);
   if (!limit.ok) return tooManyRequests(limit.retryAfter);
 

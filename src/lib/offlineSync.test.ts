@@ -14,7 +14,7 @@ import {
   type OfflineItemFields,
 } from "@/lib/offlineLists";
 import { getFolderChanges, queueFolderChange } from "@/lib/offlineFolders";
-import { hasChangesToSync, pendingChangeCount, syncAllOffline } from "@/lib/offlineSync";
+import { hasChangesToSync, pendingChangeCount, syncAllOffline, syncLatest } from "@/lib/offlineSync";
 import { fakeServer, noNetwork, stubBrowser } from "@/test/fakeBrowser";
 import type { ItemDTO } from "@/types";
 
@@ -65,6 +65,45 @@ afterEach(() => {
 
 const saved = (items: ItemDTO[], canEdit = true) =>
   saveOfflineList({ path: PATH, name: "Groceries", status: "active", items, toggleBase: BASE, canEdit });
+
+describe("syncLatest: a change made while a sync runs", () => {
+  it("is sent right after that sync, without waiting for a timer", async () => {
+    saved([]);
+    addOfflineItem(PATH, fields("Milk"));
+    const calls = fakeServer(({ body }) => [201, item(`id-${(body as OfflineItemFields).name}`, body as OfflineItemFields)]);
+
+    const first = syncAllOffline(true);
+    addOfflineItem(PATH, fields("Eggs"));
+    syncLatest(true);
+    await first;
+
+    await vi.waitFor(() => expect(calls.map((c) => (c.body as OfflineItemFields).name)).toEqual(["Milk", "Eggs"]));
+    await vi.waitFor(() => expect(getOfflineList(PATH)?.changes.added).toEqual([]));
+  });
+
+  it("starts a sync when none is running", async () => {
+    saved([]);
+    addOfflineItem(PATH, fields("Milk"));
+    const calls = fakeServer(() => [201, item("i1", { name: "Milk" })]);
+    syncLatest(true);
+    await vi.waitFor(() => expect(calls).toHaveLength(1));
+    await vi.waitFor(() => expect(getOfflineList(PATH)?.changes.added).toEqual([]));
+  });
+
+  it("keeps the change queued when the network fails, and sends it next time", async () => {
+    saved([]);
+    addOfflineItem(PATH, fields("Milk"));
+    fakeServer(noNetwork);
+    await syncAllOffline(true);
+    expect(getOfflineList(PATH)?.changes.added.map((i) => i.name)).toEqual(["Milk"]);
+    expect(getSyncProblems()).toEqual([]);
+
+    fakeServer(() => [201, item("i1", { name: "Milk" })]);
+    await syncAllOffline(true);
+    expect(getOfflineList(PATH)?.changes.added).toEqual([]);
+    expect(getOfflineList(PATH)?.items.map((i) => i.id)).toEqual(["i1"]);
+  });
+});
 
 describe("syncAllOffline: a list made offline", () => {
   it("creates the list, then its items and ticks, and moves the copy to its real path", async () => {

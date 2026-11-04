@@ -28,11 +28,11 @@ import {
   deleteOfflineItem,
   editOfflineItem,
   getOfflineList,
+  itemFields,
   itemsWithPending,
   pendingCount,
   renameOfflineGroup,
   setOfflineTick,
-  type OfflineItemFields,
 } from "@/lib/offlineLists";
 import { computeTotals, groupItems } from "@/lib/totals";
 import type { ItemDTO, Result, SavedItemDTO } from "@/types";
@@ -41,17 +41,6 @@ const RETRY_MS = 10_000;
 
 const savedAtLabel = (iso: string) =>
   new Date(iso).toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
-
-/** The item's own fields from the form (drops "save to my profile": that needs the server). */
-const fieldsOf = ({ name, category, price, priceUnit, quantity, description, group }: ItemFormValues): OfflineItemFields => ({
-  name: name.trim(),
-  category,
-  price,
-  priceUnit,
-  quantity,
-  description,
-  group,
-});
 
 interface OfflineListViewProps {
   path: string;
@@ -98,14 +87,14 @@ export default function OfflineListView({ path, onRetry, onBack }: OfflineListVi
   }
 
   async function addItem(values: ItemFormValues) {
-    const ok = show(addOfflineItem(path, fieldsOf(values)));
+    const ok = show(addOfflineItem(path, itemFields(values)));
     if (ok) setPrefill(null);
     return ok;
   }
   const addFromSaved = async (saved: SavedItemDTO, group: string | null) =>
-    show(addOfflineItem(path, { ...fieldsOf({ ...saved, group }) }));
+    show(addOfflineItem(path, itemFields({ ...saved, group })));
   const renameGroup = async (from: string | null, to: string | null) => show(renameOfflineGroup(path, from, to));
-  const saveItem = async (item: ItemDTO, values: ItemFormValues) => show(editOfflineItem(path, item.id, fieldsOf(values)));
+  const saveItem = async (item: ItemDTO, values: ItemFormValues) => show(editOfflineItem(path, item.id, itemFields(values)));
 
   function deleteItem(item: ItemDTO) {
     if (!confirm(`Delete "${item.name}"?`)) return;
@@ -136,7 +125,7 @@ export default function OfflineListView({ path, onRetry, onBack }: OfflineListVi
           <p className="text-sm text-muted">
             {list.created ? (
               <>
-                <span className="text-fg">Made offline.</span> It will be saved to your account when you&apos;re back
+                <span className="text-fg">Not saved yet.</span> It will be saved to your account as soon as you&apos;re
                 online.
               </>
             ) : (

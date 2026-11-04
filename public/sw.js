@@ -43,6 +43,39 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+// Reminders (Web Push, see src/lib/reminders.ts). Something must always be
+// shown: browsers can cancel the subscription of a worker that stays silent.
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data?.json() ?? {};
+  } catch {}
+  event.waitUntil(
+    self.registration.showNotification(data.title || "Listy", {
+      body: data.body || "",
+      icon: "/icons/icon-192.png",
+      data: { url: data.url },
+    })
+  );
+});
+
+// Opens the list: in a Listy window that is already open, if there is one.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const wanted = event.notification.data?.url;
+  // Our own pages only.
+  const path = typeof wanted === "string" && /^\/(?!\/)/.test(wanted) ? wanted : "/";
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      const open = windows.find((client) => new URL(client.url).origin === self.location.origin);
+      if (!open) return self.clients.openWindow(path);
+      await open.focus();
+      return open.navigate(path).catch(() => {});
+    })()
+  );
+});
+
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);

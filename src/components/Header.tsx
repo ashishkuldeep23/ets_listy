@@ -20,6 +20,7 @@ import { ME_UPDATED_EVENT } from "@/lib/constants";
 import { claimOfflineData, clearOfflineLists } from "@/lib/offlineLists";
 import { whenOfflineReady } from "@/lib/offlineStore";
 import { clearOfflineCache, pendingChangeCount } from "@/lib/offlineSync";
+import { disablePush } from "@/lib/pushClient";
 import type { SessionUser } from "@/types";
 
 export default function Header({ allowGuest = false }: { allowGuest?: boolean }) {
@@ -71,6 +72,8 @@ export default function Header({ allowGuest = false }: { allowGuest?: boolean })
     if (unsent > 0 && !confirm(`${unsent} offline ${unsent === 1 ? "change has" : "changes have"} not been sent yet and will be lost. Log out anyway?`)) {
       return;
     }
+    // Before logging out: removing this device needs the session.
+    await disablePush().catch(() => {});
     await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
     // Lists saved for offline use stay on the device otherwise; the next person here shouldn't see them.
     clearOfflineLists();

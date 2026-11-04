@@ -26,14 +26,17 @@ export default function SaveOfflineButton({ path, name, status, items, toggleBas
   const ready = useOfflineVersion() >= 0;
   // Share links aren't "my lists": those are always saved by hand.
   const auto = ready && path.startsWith("/folders/") && isAutoSaveOn();
-  const saved = ready && (auto || getOfflineList(path) !== null);
+  const copy = ready ? getOfflineList(path) : null;
+  const saved = ready && (auto || (copy !== null && !copy.auto));
+  // With the setting off, an automatic copy only carries queued changes: it isn't "saved", but must stay fresh.
+  const hasCopy = copy !== null;
   const router = useRouter();
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     // A copy made here because of the setting counts as an automatic one.
-    if (saved) saveOfflineList({ path, name, status, items, toggleBase, canEdit, ...(!getOfflineList(path) && { auto }) });
-  }, [saved, auto, path, name, status, items, toggleBase, canEdit]);
+    if (saved || hasCopy) saveOfflineList({ path, name, status, items, toggleBase, canEdit, ...(!getOfflineList(path) && { auto }) });
+  }, [saved, hasCopy, auto, path, name, status, items, toggleBase, canEdit]);
 
   // Re-save the page itself once per visit: the browser may have evicted it,
   // or it was saved by an older version of the app that kept less.

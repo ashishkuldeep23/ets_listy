@@ -19,6 +19,17 @@ export interface FolderDTO {
   updatedAt: string | Date;
 }
 
+/** My reminder for a list. Private: other members have their own. */
+export interface ReminderDTO {
+  remindAt: string | Date;
+  /** The notification has gone out. */
+  sent: boolean;
+}
+
+export interface ReminderResponse {
+  reminder: ReminderDTO | null;
+}
+
 /** What the caller may do with a folder (see lib/access.ts). */
 export interface FolderPermissions {
   role: "owner" | "shared";

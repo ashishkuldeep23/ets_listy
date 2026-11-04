@@ -406,8 +406,9 @@ export function setOfflineTick(path: string, itemId: string, tick: OfflineTick, 
   );
 }
 
-const fieldsOf = ({ name, category, price, priceUnit, quantity, description, group }: ItemDTO): OfflineItemFields => ({
-  name,
+/** Only an item's own fields, from an item or the item form (drops e.g. "save to my profile"). */
+export const itemFields = ({ name, category, price, priceUnit, quantity, description, group }: OfflineItemFields): OfflineItemFields => ({
+  name: name.trim(),
   category,
   price,
   priceUnit,
@@ -444,7 +445,7 @@ export function renameOfflineGroup(
     if (isLocalItemId(item.id)) {
       changes.added = changes.added.map((i) => (i.id === item.id ? { ...i, group: to } : i));
     } else {
-      changes.edits[item.id] = { ...fieldsOf(item), group: to };
+      changes.edits[item.id] = { ...itemFields(item), group: to };
     }
   }
   return { ok: true, value: write({ ...list, changes }, storage) };

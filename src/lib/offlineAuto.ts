@@ -63,7 +63,14 @@ export async function refreshAllOffline(now = new Date()): Promise<void> {
   // The setting and the last run time are stored too.
   await whenOfflineReady();
   const storage = browserStorage();
-  if (!isAutoSaveOn(storage) || running) return running ?? Promise.resolve();
+  if (!isAutoSaveOn(storage)) {
+    // With the setting off, a copy only exists to carry queued changes: done once they are sent.
+    for (const list of listOfflineLists(storage)) {
+      if (list.auto && pendingCount(list) === 0) removeOfflineList(list.path, storage);
+    }
+    return;
+  }
+  if (running) return running;
   const last = Number(storage?.getItem(LAST_RUN_KEY) ?? 0);
   if (now.getTime() - last < RUN_EVERY_MS) return Promise.resolve();
   try {
@@ -94,6 +101,9 @@ export async function refreshAllOffline(now = new Date()): Promise<void> {
         throw err;
       }
       const path = `/folders/${folder.id}`;
+      // A change queued while this was loading could be lost against older data; the next run gets it.
+      const copy = getOfflineList(path);
+      if (copy && pendingCount(copy) > 0) continue;
       saveOfflineList({
         path,
         name: folder.name,

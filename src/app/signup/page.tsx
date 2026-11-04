@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import AuthForm from "@/components/AuthForm";
+import AuthPage from "@/components/AuthPage";
 
 export const metadata: Metadata = { title: "Sign up · Listy" };
 
@@ -8,7 +8,7 @@ export const metadata: Metadata = { title: "Sign up · Listy" };
 export default function SignupPage() {
   return (
     <Suspense>
-      <AuthForm mode="signup" />
+      <AuthPage mode="signup" />
     </Suspense>
   );
 }

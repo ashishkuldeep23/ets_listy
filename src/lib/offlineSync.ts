@@ -1,8 +1,9 @@
 // Browser-only side of offline use: puts pages (and the JS/CSS they need)
 // into the service worker's cache so they open with no internet, and sends
-// changes made offline (new lists, folder renames / status / deletes, items,
-// edits, ticks, deletes) to the
-// server once we are back online.
+// queued changes (new lists, folder renames / status / deletes, items, edits,
+// ticks, deletes) to the server. Online pages queue their changes here too:
+// the UI updates at once and the request runs in the background, so a failed
+// call simply stays queued and is retried.
 
 import { ApiError, apiFetch } from "@/lib/apiClient";
 import { DEFAULT_STATUS } from "@/lib/constants";
@@ -354,6 +355,22 @@ export const hasChangesToSync = (loggedIn: boolean) =>
   listsToSync(loggedIn).length > 0 || (loggedIn && Object.keys(getFolderChanges()).length > 0);
 
 let running: Promise<void> | null = null;
+/** A change came in during a sync that may have passed it already: how to run once more (null: no need). */
+let rerunAs: boolean | null = null;
+
+/** Fired on window to send waiting changes now; OfflineStatus knows who is logged in, so it runs the sync. */
+export const SYNC_NOW_EVENT = "listy:sync-now";
+
+/** Call right after queueing a change, so it goes out at once instead of on the next timer. */
+export function requestSyncNow(): void {
+  window.dispatchEvent(new Event(SYNC_NOW_EVENT));
+}
+
+/** Sends what is waiting now; during a running sync, runs once more after it so nothing waits for the timer. */
+export function syncLatest(loggedIn: boolean): void {
+  if (running) rerunAs = loggedIn;
+  else void syncAllOffline(loggedIn);
+}
 
 /**
  * Sends the offline changes of every list on this device, one list at a
@@ -376,6 +393,11 @@ export function syncAllOffline(loggedIn: boolean): Promise<void> {
     // Cleared after the assignment above (an async body with nothing to do finishes at once).
     .finally(() => {
       running = null;
+      if (rerunAs !== null) {
+        const again = rerunAs;
+        rerunAs = null;
+        void syncAllOffline(again);
+      }
     });
   return running;
 }
