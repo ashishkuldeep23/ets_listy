@@ -22,17 +22,10 @@ export interface GoogleProfile {
 export const isGoogleOnly = (): boolean => process.env.ONLY_LOGIN_WITH_GOOGLE === "true";
 
 export const isGoogleConfigured = (): boolean =>{
-  console.log("GOOGLE_CLIENT_ID:", process.env.GOOGLE_CLIENT_ID, "GOOGLE_CLIENT_SECRET:", process.env.GOOGLE_CLIENT_SECRET);
   return Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)
 }
 
 
-export const showEnvValsOnConsole = () =>{
-  return {
-    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
-    GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
-  }
-}
 
   // Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 
