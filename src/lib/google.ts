@@ -21,8 +21,11 @@ export interface GoogleProfile {
 /** Password login and signup are off; read per request so changing the env needs no rebuild. */
 export const isGoogleOnly = (): boolean => process.env.ONLY_LOGIN_WITH_GOOGLE === "true";
 
-export const isGoogleConfigured = (): boolean =>
-  Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+export const isGoogleConfigured = (): boolean =>{
+  console.log("GOOGLE_CLIENT_ID:", process.env.GOOGLE_CLIENT_ID, "GOOGLE_CLIENT_SECRET:", process.env.GOOGLE_CLIENT_SECRET);
+  return Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)
+}
+  // Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 
 /** Must exactly match an "Authorized redirect URI" in the Google Cloud console. */
 export const googleRedirectUri = (request: Request): string =>
