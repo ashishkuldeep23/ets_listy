@@ -75,6 +75,8 @@ export default function ReminderButton({ folderId, listName }: { folderId: strin
         body: JSON.stringify({ remindAt: new Date(value).toISOString() }),
       });
       setReminder(res.reminder);
+      // The reminder is saved: turning on notifications may take a while, and mustn't hold the form.
+      setBusy(false);
       const push = await enablePush();
       if (!push.ok) setPushProblem(push.error);
     } catch (err) {

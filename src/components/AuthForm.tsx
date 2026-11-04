@@ -70,7 +70,7 @@ export default function AuthForm({ mode, passwordAllowed, googleAllowed }: AuthF
 
       {googleAllowed && (
         // A plain link, not next/link: this leaves the app for Google, and must never be prefetched.
-        <a href={`/api/auth/google${next !== "/" ? `?next=${encodeURIComponent(next)}` : ""}`} className="btn-secondary justify-center">
+        <a href={`/api/auth/google${next !== "/" ? `?next=${encodeURIComponent(next)}` : ""}`} className="btn-secondary text-red-600 border-red-600 font-semibold justify-center">
           <GoogleIcon />
           Continue with Google
         </a>

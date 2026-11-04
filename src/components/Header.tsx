@@ -104,7 +104,7 @@ export default function Header({ allowGuest = false }: { allowGuest?: boolean })
             title="Profile and saved items"
           >
             <Avatar name={user.name} />
-            <span className="max-w-[7rem] truncate font-medium sm:max-w-[10rem]">{firstNameOf(user.name)}</span>
+            {/* <span className="max-w-[7rem] truncate font-medium sm:max-w-[10rem]">{firstNameOf(user.name)}</span> */}
           </Link>
         )}
         {guestNext !== null ? (

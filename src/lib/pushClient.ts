@@ -13,7 +13,16 @@ export function vapidKeyBytes(key: string): Uint8Array<ArrayBuffer> {
   return bytes;
 }
 
-const isIos = () => /iPad|iPhone|iPod/.test(navigator.userAgent);
+/** Registering can hang for good when the browser can't reach its push service: never wait for that. */
+const PUSH_TIMEOUT_MS = 15_000;
+
+const withTimeout = <T>(work: Promise<T>): Promise<T> =>
+  Promise.race([
+    work,
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Push registration timed out")), PUSH_TIMEOUT_MS)),
+  ]);
+
+const isIos = () =>/iPad|iPhone|iPod/.test(navigator.userAgent);
 
 /**
  * Turns notifications on for this device (asking permission if needed) and
@@ -39,10 +48,15 @@ export async function enablePush(): Promise<Result<true>> {
     return { ok: false, error: "Notifications are blocked for Listy. Allow them in your browser or phone settings." };
   }
   try {
-    const registration = await navigator.serviceWorker.ready;
-    const subscription =
-      (await registration.pushManager.getSubscription()) ??
-      (await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidKeyBytes(key) }));
+    const subscription = await withTimeout(
+      (async () => {
+        const registration = await navigator.serviceWorker.ready;
+        return (
+          (await registration.pushManager.getSubscription()) ??
+          (await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidKeyBytes(key) }))
+        );
+      })()
+    );
     await apiFetch("/api/push/subscription", { method: "POST", body: JSON.stringify(subscription) });
     return { ok: true, value: true };
   } catch (err) {
