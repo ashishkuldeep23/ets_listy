@@ -40,9 +40,9 @@ import type { FeedbackDTO, FeedbackListResponse } from "@/types";
 const STARS = Array.from({ length: LIMITS.FEEDBACK_RATING_MAX }, (_, i) => i + 1);
 
 const CATEGORY_ICONS: Record<FeedbackCategory, LucideIcon> = {
+  feedback: MessageSquare,
   suggestion: Lightbulb,
   appreciation: Heart,
-  feedback: MessageSquare,
   bug: Bug,
 };
 
