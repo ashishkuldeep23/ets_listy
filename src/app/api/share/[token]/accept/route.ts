@@ -19,7 +19,8 @@ const INVALID = "This link is not valid or was turned off";
 export async function POST(request: Request, ctx: Ctx): Promise<Response> {
   try {
     // Slow down anyone trying to guess tokens (per IP, before any DB work).
-    const limit = rateLimit(`accept:${getClientIp(request)}`, { limit: 30 });
+    // Roomy: a class or office may all open one link from one IP.
+    const limit = rateLimit(`accept:${getClientIp(request)}`, { limit: 100 });
     if (!limit.ok) return tooManyRequests(limit.retryAfter);
 
     const user = await requireUser(request);

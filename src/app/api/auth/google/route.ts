@@ -10,7 +10,8 @@ const STATE_MAX_AGE = 10 * 60;
 
 // GET /api/auth/google?next=: sends the browser to Google's account picker.
 export async function GET(request: Request): Promise<Response> {
-  const limit = rateLimit(`google:${getClientIp(request)}`);
+  // One login uses two of these (here + the callback), and one IP can be a whole network.
+  const limit = rateLimit(`google:${getClientIp(request)}`, { limit: 100 });
   if (!limit.ok) return tooManyRequests(limit.retryAfter);
 
   const url = new URL(request.url);

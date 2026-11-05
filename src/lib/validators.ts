@@ -1,6 +1,15 @@
+import { isActivationTokenShape } from "@/lib/activation";
 import { LIMITS } from "@/lib/limits";
+import { safeNextPath } from "@/lib/safeRedirect";
 import { GUEST_ID_RE, STATUS_VALUES, isFolderStatus, type FolderStatus } from "@/lib/constants";
-import { FEEDBACK_DEFAULT_NAME, FEEDBACK_DEFAULT_RATING } from "@/lib/feedback";
+import {
+  FEEDBACK_CATEGORIES,
+  FEEDBACK_DEFAULT_CATEGORY,
+  FEEDBACK_DEFAULT_NAME,
+  FEEDBACK_DEFAULT_RATING,
+  isFeedbackCategory,
+  type FeedbackCategory,
+} from "@/lib/feedback";
 import type { Result } from "@/types";
 
 // Plain validators for request bodies. Each takes `unknown` (whatever the
@@ -52,9 +61,11 @@ export interface SignupInput {
   name: string;
   email: string;
   password: string;
+  /** Where to go after activating; anything unsafe becomes "/". */
+  next: string;
 }
 
-/** Body for POST /api/auth/signup: { name, email, password }. */
+/** Body for POST /api/auth/signup: { name, email, password, confirmPassword, next? }. */
 export function validateSignup(body: unknown): Result<SignupInput> {
   if (!isPlainObject(body)) return fail("body must be a JSON object");
 
@@ -64,8 +75,18 @@ export function validateSignup(body: unknown): Result<SignupInput> {
   if (email.error !== undefined) return fail(email.error);
   const password = cleanPassword(body.password);
   if (password.error !== undefined) return fail(password.error);
+  if (body.confirmPassword !== password.value) return fail("Passwords don't match");
 
-  return { ok: true, value: { name: name.value, email: email.value, password: password.value } };
+  return {
+    ok: true,
+    value: { name: name.value, email: email.value, password: password.value, next: safeNextPath(body.next) },
+  };
+}
+
+/** Body for POST /api/auth/activate: { token }. */
+export function validateActivation(body: unknown): Result<{ token: string }> {
+  if (!isPlainObject(body) || !isActivationTokenShape(body.token)) return fail("This link is not valid");
+  return { ok: true, value: { token: body.token } };
 }
 
 export interface LoginInput {
@@ -448,14 +469,18 @@ export function validatePasswordChange(body: unknown): Result<{ newPassword: str
 
 export interface FeedbackInput {
   name: string;
+  category: FeedbackCategory;
   rating: number;
   message: string;
 }
 
-/** Body for creating or updating feedback: { message, name?, rating? }. Empty name and rating take the defaults. */
+/** Body for creating or updating feedback: { message, name?, category?, rating? }. Empty name, category and rating take the defaults. */
 export function validateFeedback(body: unknown): Result<FeedbackInput> {
   if (!isPlainObject(body)) return fail("body must be a JSON object");
-  const { name, rating, message } = body;
+  const { name, category, rating, message } = body;
+
+  const kind = category ?? FEEDBACK_DEFAULT_CATEGORY;
+  if (!isFeedbackCategory(kind)) return fail(`category must be one of: ${FEEDBACK_CATEGORIES.join(", ")}`);
 
   if (name !== undefined && name !== null && typeof name !== "string") return fail("name must be a string");
   const cleanedName = (name ?? "").trim() || FEEDBACK_DEFAULT_NAME;
@@ -471,7 +496,7 @@ export function validateFeedback(body: unknown): Result<FeedbackInput> {
   if (!text) return fail("message is required");
   if (text.length > LIMITS.FEEDBACK_MESSAGE_MAX) return fail(`message must be at most ${LIMITS.FEEDBACK_MESSAGE_MAX} characters`);
 
-  return { ok: true, value: { name: cleanedName, rating: stars, message: text } };
+  return { ok: true, value: { name: cleanedName, category: kind, rating: stars, message: text } };
 }
 
 /* ---------- list chat ---------- */

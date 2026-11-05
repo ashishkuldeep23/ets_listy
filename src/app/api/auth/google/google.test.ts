@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { makeRequest, sessionCookieFrom, setupTestDb } from "@/test/setup";
+import { createUserAndCookie, makeRequest, sessionCookieFrom, setupTestDb } from "@/test/setup";
 import { GET as start } from "@/app/api/auth/google/route";
 import { GET as callback } from "@/app/api/auth/google/callback/route";
 import { POST as login } from "@/app/api/auth/login/route";
+import { GET as me } from "@/app/api/auth/me/route";
 import { POST as signup } from "@/app/api/auth/signup/route";
 import { hashPassword } from "@/lib/auth";
 import { User } from "@/models/User";
@@ -93,6 +94,18 @@ describe("GET /api/auth/google/callback", () => {
     expect(user?.passwordHash).toBeUndefined();
     const res = await login(makeRequest("/api/auth/login", { method: "POST", body: { email: "asha@example.com", password: "attacker-pass" } }));
     expect(res.status).toBe(401);
+  });
+
+  it("ends the session of whoever registered that email first", async () => {
+    // Signup doesn't verify emails, so an attacker can sign up first and stay logged in.
+    const { cookie: attacker } = await createUserAndCookie({ name: "Early", email: "asha@example.com", password: "attacker-pass" });
+    expect((await me(makeRequest("/api/auth/me", { cookie: attacker }))).status).toBe(200);
+
+    googleAnswers(200, { id_token: idToken() });
+    const owner = sessionCookieFrom(await callbackWith("s1", "s1.%2F"));
+
+    expect((await me(makeRequest("/api/auth/me", { cookie: attacker }))).status).toBe(401);
+    expect((await me(makeRequest("/api/auth/me", { cookie: owner }))).status).toBe(200);
   });
 
   it("refuses an email that belongs to another Google account", async () => {

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createUserAndCookie, json, makeRequest, setupTestDb } from "@/test/setup";
+import { createUserAndCookie, json, makeRequest, sessionCookieFrom, setupTestDb } from "@/test/setup";
 import { POST as login } from "@/app/api/auth/login/route";
+import { GET as me } from "@/app/api/auth/me/route";
 import { GET as status, POST as change } from "@/app/api/auth/password/route";
 import { createSessionToken, SESSION_COOKIE } from "@/lib/session";
 import { User } from "@/models/User";
@@ -32,6 +33,21 @@ describe("POST /api/auth/password", () => {
     expect((await post(cookie, { currentPassword: OLD, newPassword: NEW })).status).toBe(204);
     expect(await canLogin(NEW)).toBe(true);
     expect(await canLogin(OLD)).toBe(false);
+  });
+
+  it("logs out every other device, but keeps this one logged in", async () => {
+    const { cookie } = await createUserAndCookie({ email: EMAIL, password: OLD });
+    const res = await post(cookie, { currentPassword: OLD, newPassword: NEW });
+    expect(res.status).toBe(204);
+
+    // The old cookie (say, stolen) stops working, and is told to go away.
+    const stale = await me(makeRequest("/api/auth/me", { cookie }));
+    expect(stale.status).toBe(401);
+    expect(stale.headers.get("set-cookie")).toMatch(/listy_session=;/);
+
+    const fresh = sessionCookieFrom(res);
+    expect(fresh).toBeTruthy();
+    expect((await me(makeRequest("/api/auth/me", { cookie: fresh }))).status).toBe(200);
   });
 
   it("stores a hash and never returns it", async () => {
@@ -67,9 +83,11 @@ describe("POST /api/auth/password", () => {
 
   it("lets a Google account set its first password, then asks for it", async () => {
     const cookie = await googleUser();
-    expect((await post(cookie, { newPassword: NEW })).status).toBe(204);
+    const res = await post(cookie, { newPassword: NEW });
+    expect(res.status).toBe(204);
     expect(await canLogin(NEW, "g@example.com")).toBe(true);
-    expect((await post(cookie, { newPassword: "another-new-pass" })).status).toBe(400);
+    // The change ended older sessions, so this goes on with the fresh cookie.
+    expect((await post(sessionCookieFrom(res), { newPassword: "another-new-pass" })).status).toBe(400);
   });
 
   it("is refused when only Google login is on", async () => {

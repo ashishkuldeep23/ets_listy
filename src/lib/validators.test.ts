@@ -16,17 +16,36 @@ import {
 import { LIMITS } from "@/lib/limits";
 import { STATUS_VALUES } from "@/lib/constants";
 
-const good = { name: "Asha", email: "Asha@Example.com", password: "password123" };
+const good = { name: "Asha", email: "Asha@Example.com", password: "password123", confirmPassword: "password123" };
+const withPassword = (password: unknown) => ({ ...good, password, confirmPassword: password });
 
 describe("validateSignup", () => {
   it("accepts good input, trims name and lowercases email", () => {
     const r = validateSignup({ ...good, name: "  Asha  " });
-    expect(r).toEqual({ ok: true, value: { name: "Asha", email: "asha@example.com", password: "password123" } });
+    expect(r).toEqual({ ok: true, value: { name: "Asha", email: "asha@example.com", password: "password123", next: "/" } });
   });
 
   it("keeps only allowed fields", () => {
     const r = validateSignup({ ...good, _id: "x", passwordHash: "y", isAdmin: true });
-    expect(r.ok && Object.keys(r.value).sort()).toEqual(["email", "name", "password"]);
+    expect(r.ok && Object.keys(r.value).sort()).toEqual(["email", "name", "next", "password"]);
+  });
+
+  it("needs the confirmation to match exactly", () => {
+    expect(validateSignup({ ...good, confirmPassword: "password124" }).ok).toBe(false);
+    expect(validateSignup({ ...good, confirmPassword: "password123 " }).ok).toBe(false);
+    expect(validateSignup({ ...good, confirmPassword: undefined }).ok).toBe(false);
+    expect(validateSignup({ ...good, confirmPassword: { $ne: null } }).ok).toBe(false);
+  });
+
+  it("keeps a safe next path and drops an unsafe one", () => {
+    const next = (value: unknown) => {
+      const r = validateSignup({ ...good, next: value });
+      return r.ok ? r.value.next : null;
+    };
+    expect(next("/share/abc")).toBe("/share/abc");
+    expect(next("https://evil.example")).toBe("/");
+    expect(next("//evil.example")).toBe("/");
+    expect(next({ $gt: "" })).toBe("/");
   });
 
   it("rejects missing or blank fields", () => {
@@ -42,11 +61,11 @@ describe("validateSignup", () => {
   });
 
   it("enforces password length (8 chars to 72 bytes)", () => {
-    expect(validateSignup({ ...good, password: "short" }).ok).toBe(false);
-    expect(validateSignup({ ...good, password: "x".repeat(73) }).ok).toBe(false);
+    expect(validateSignup(withPassword("short")).ok).toBe(false);
+    expect(validateSignup(withPassword("x".repeat(73))).ok).toBe(false);
     // 25 three-byte characters = 75 bytes, over the bcrypt limit even though only 25 chars.
-    expect(validateSignup({ ...good, password: "₹".repeat(25) }).ok).toBe(false);
-    expect(validateSignup({ ...good, password: "x".repeat(72) }).ok).toBe(true);
+    expect(validateSignup(withPassword("₹".repeat(25))).ok).toBe(false);
+    expect(validateSignup(withPassword("x".repeat(72))).ok).toBe(true);
   });
 
   it("rejects name over 60 characters", () => {

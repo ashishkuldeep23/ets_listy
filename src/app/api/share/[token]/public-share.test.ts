@@ -84,10 +84,10 @@ describe("public share view", () => {
     expect((await view(fresh)).status).toBe(404);
   });
 
-  it("rate-limits guessing per IP", async () => {
+  it("rate-limits guessing per IP", { timeout: 120_000 }, async () => {
     const headers = { "x-forwarded-for": "203.0.113.9" };
     let last = 0;
-    for (let i = 0; i < 121; i++) last = (await view("B".repeat(32), headers)).status;
+    for (let i = 0; i < 1201; i++) last = (await view("B".repeat(32), headers)).status;
     expect(last).toBe(429);
   });
 });

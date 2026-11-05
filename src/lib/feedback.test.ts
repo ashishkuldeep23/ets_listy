@@ -21,7 +21,7 @@ describe("feedbackTone", () => {
 
 describe("validateFeedback", () => {
   it("fills in the default name and rating", () => {
-    expect(validateFeedback({ message: "Nice" })).toEqual({ ok: true, value: { name: "User", rating: 5, message: "Nice" } });
+    expect(validateFeedback({ message: "Nice" })).toEqual({ ok: true, value: { name: "User", category: "feedback", rating: 5, message: "Nice" } });
   });
 
   it.each([[""], ["   "], [null]])("treats a name of %j as the default", (name) => {
@@ -31,7 +31,7 @@ describe("validateFeedback", () => {
 
   it("trims and returns only the allowed fields", () => {
     const r = validateFeedback({ name: " Asha ", rating: 1, message: " Good ", user: "x", deletedAt: null, mine: true });
-    expect(r).toEqual({ ok: true, value: { name: "Asha", rating: 1, message: "Good" } });
+    expect(r).toEqual({ ok: true, value: { name: "Asha", category: "feedback", rating: 1, message: "Good" } });
   });
 
   it.each([[1], [5]])("accepts a rating of %i", (rating) => {

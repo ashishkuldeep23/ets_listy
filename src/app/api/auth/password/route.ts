@@ -1,4 +1,5 @@
-import { hashPassword, requireUser, verifyPassword } from "@/lib/auth";
+import { NextResponse } from "next/server";
+import { hashPassword, requireUser, setSessionCookie, verifyPassword } from "@/lib/auth";
 import { isGoogleOnly } from "@/lib/google";
 import { jsonError, readJson, serverError, tooManyRequests } from "@/lib/http";
 import { rateLimit } from "@/lib/rateLimit";
@@ -52,8 +53,12 @@ export async function POST(request: Request): Promise<Response> {
       }
     }
 
-    await User.updateOne({ _id: stored._id }, { $set: { passwordHash: await hashPassword(newPassword) } });
-    return new Response(null, { status: 204 });
+    // Logs out every other device (someone may have stolen a session); this one gets a fresh cookie.
+    await User.updateOne(
+      { _id: stored._id },
+      { $set: { passwordHash: await hashPassword(newPassword) }, $inc: { sessionVersion: 1 } }
+    );
+    return await setSessionCookie(new NextResponse(null, { status: 204 }), user.id);
   } catch (err) {
     return serverError(err);
   }

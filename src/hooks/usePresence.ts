@@ -13,7 +13,9 @@ import { GUEST_ID_HEADER } from "@/lib/constants";
 import { getGuestId } from "@/lib/guestId";
 import type { ActivePerson, PresenceResponse } from "@/types";
 
-const HEARTBEAT_MS = 10_000;
+// The most frequent request in the app (several DB reads each), so this sets how many
+// people the database can carry. Must stay under PRESENCE_TTL_MS in lib/presence.ts.
+const HEARTBEAT_MS = 20_000;
 
 export interface Presence {
   /** Everyone here, me included. Empty while offline or before the first answer. */

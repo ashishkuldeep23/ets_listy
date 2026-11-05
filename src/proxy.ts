@@ -14,7 +14,8 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   const loggedIn = Boolean(await verifySessionToken(token));
   const onAuthPage = AUTH_PAGES.includes(pathname);
-  const onPublicPage = pathname.startsWith("/share/");
+  // /activate/<token> is the link in a signup email, opened before any account exists.
+  const onPublicPage = pathname.startsWith("/share/") || pathname.startsWith("/activate/");
 
   if (!loggedIn && !onAuthPage && !onPublicPage) {
     const url = new URL("/login", request.url);

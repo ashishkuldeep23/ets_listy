@@ -10,7 +10,7 @@ import { safeNextPath } from "@/lib/safeRedirect";
 // here. Checks the state, gets the profile, logs in (making the account the
 // first time). Every failure shows one generic message on the login page.
 export async function GET(request: Request): Promise<Response> {
-  const limit = rateLimit(`google:${getClientIp(request)}`);
+  const limit = rateLimit(`google:${getClientIp(request)}`, { limit: 100 });
   if (!limit.ok) return tooManyRequests(limit.retryAfter);
 
   const url = new URL(request.url);

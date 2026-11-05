@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { SignJWT } from "jose";
-import { createSessionToken, verifySessionToken } from "@/lib/session";
+import { createSessionToken, readSessionToken, verifySessionToken } from "@/lib/session";
 import { hashPassword, verifyPassword } from "@/lib/auth";
 
 const secret = () => new TextEncoder().encode(process.env.SESSION_SECRET);
@@ -14,6 +14,8 @@ describe("session tokens", () => {
   it("round-trips the user id", async () => {
     const token = await createSessionToken("652f1c2b9d3e4a0012345678");
     expect(await verifySessionToken(token)).toBe("652f1c2b9d3e4a0012345678");
+    expect(await readSessionToken(await createSessionToken("abc", 3))).toEqual({ userId: "abc", version: 3 });
+    expect(await readSessionToken("not.a.jwt")).toBeNull();
   });
 
   it("returns null for missing, garbage and tampered tokens", async () => {

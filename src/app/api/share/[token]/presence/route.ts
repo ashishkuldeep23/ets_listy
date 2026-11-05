@@ -15,7 +15,8 @@ const INVALID = "This link is not valid or was turned off";
 
 export async function POST(request: Request, ctx: Ctx): Promise<Response> {
   try {
-    const limit = rateLimit(`share-presence:${getClientIp(request)}`, { limit: 600 });
+    // Per IP, and many guests can share one (heartbeat: 45 in this window per guest).
+    const limit = rateLimit(`share-presence:${getClientIp(request)}`, { limit: 1200 });
     if (!limit.ok) return tooManyRequests(limit.retryAfter);
 
     const guestId = cleanGuestId(request.headers.get(GUEST_ID_HEADER));

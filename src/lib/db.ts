@@ -28,7 +28,16 @@ export async function connectDB(): Promise<typeof mongoose> {
     throw new Error("MONGODB_URI is not set. Copy .env.example to .env.local.");
   }
 
-  cached.promise ??= mongoose.connect(uri, { bufferCommands: false });
+  cached.promise ??= mongoose.connect(uri, {
+    bufferCommands: false,
+    // The default is 100 per server process. Serverless hosts run many processes,
+    // and the cluster's connection limit is shared by all of them.
+    maxPoolSize: 10,
+    // Quiet processes give their connections back.
+    maxIdleTimeMS: 60_000,
+    // If the database is down, answer with an error soon instead of keeping people waiting 30 s.
+    serverSelectionTimeoutMS: 5_000,
+  });
 
   try {
     cached.conn = await cached.promise;

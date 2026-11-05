@@ -14,7 +14,7 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
     const user = await requireUser(request);
     if (user instanceof Response) return user;
 
-    // A heartbeat every ~10 s per open tab fits well under this.
+    // A heartbeat every ~20 s per open tab fits well under this.
     const limit = rateLimit(`presence:${user.id}`, { limit: 600 });
     if (!limit.ok) return tooManyRequests(limit.retryAfter);
 

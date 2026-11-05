@@ -49,28 +49,6 @@ aur ek chij fix kro jb bhi user kisi bhi item name pr click kre to user complete
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Do this ( need to set these envs before starting up ) ----------------------------->>>>>
 
 Variable	Kahan se milega
@@ -123,3 +101,74 @@ NEXT_PUBLIC_VAPID_PUBLIC_KEY=<public key>
 VAPID_PRIVATE_KEY=<private key>
 VAPID_SUBJECT=mailto:aapka-email@example.com
 CRON_SECRET=<generated secret>
+
+
+
+
+
+
+
+
+
+------------------------------------------------------------------->>>>>>>>>>>
+
+
+Earning
+
+
+List app mein sirf ads se shuru mein zyada paisa nahi aata. Agar 1,000 daily users 5 page dekhein aur ₹20–80 per 1,000 views milein (yeh mera andaza hai), to ₹3,000–12,000/month banta hai. Itna to hosting ka kharcha hi ho sakta hai.
+
+Main is order mein karunga:
+
+Affiliate links: item ke paas "Buy" button (Amazon, BigBasket). Yeh sabse sasta aur sabse natural hai, kyunki log kharidne ki list hi bana rahe hain. Rates check kar lena, sources mein grocery 3–8% ke beech alag-alag mile.
+Business plan (₹299+/month): kirana, event planners, societies ke liye team lists, export aur reports. Yahan ek customer kai aam users ke barabar kamata hai.
+Pro plan (₹49–99/month): no ads, recurring reminders, budget reports. Razorpay lagbhag 2% + GST leta hai.
+Ads: traffic aane ke baad.
+Ads kaise lagayein
+Pehle yeh zaroori hai:
+
+Vercel Pro: Hobby plan par commercial use allowed nahi hai.
+Public landing page: abhi logged-out visitor sidha /login par jata hai, to Google ko dekhne ke liye content nahi milega.
+Public content: list templates aur articles ("monthly grocery list" jaise), jo search se traffic bhi layenge.
+Policy pages: privacy policy, terms, contact, aur account delete ka option.
+AdSense steps:
+
+adsense.google.com par site add karo.
+Unka script root layout mein lagao aur public/ads.txt daalo.
+Approval ke baad pehle public pages par ad units lagao.
+Ads kahan nahi lagane: login aur error pages, chat, aur guest share pages. Google non-content aur private communication wali screens par ads allow nahi karta, aur share pages par users ka unchecked content hota hai. Login ke peeche ads ke liye crawler login setup karna padta hai.
+
+Payment: USD threshold $100 hai. INR ka figure sources mein alag-alag mila, to apne AdSense account mein dekh lena.
+
+Dusre ad networks: Adsterra aur Monetag jaise networks mein approval aasan mana jata hai, par maine inhe verify nahi kiya. Inke popups se users bhagte hain, isliye main avoid karunga.
+
+Play Store: agar app wahan daalo aur digital plan becho, to Google Play Billing lagana zaroori hai.
+
+Aapse chahiye
+Tests: kya main failing tests dhoondh kar theek karun, aur feedback test ki 2 lines update karke poora check chalaun? Aapne test ke liye mana kiya tha, isliye ruka hoon. Yeh commit se pehle zaroori hai, aur main yehi recommend karta hoon.
+App kahan deployed hai? Scaling ki kuch salah (Redis, cron, IP limits) iske hisaab se badalti hai. Maine Vercel maan kar likha hai, par code mein iska koi pakka saboot nahi mila.
+Sources:
+
+Vercel fair use guidelines
+Vercel cron limits
+Atlas free cluster limits
+Atlas Flex costs
+Pusher pricing
+AdSense eligibility
+AdSense ad placement policy
+AdSense ads behind login
+AdSense payment thresholds
+Play Billing in a Trusted Web Activity
+Razorpay pricing
+Grocery affiliate programs in India
+Amazon India commission rates
+
+
+
+
+
+
+
+
+
+

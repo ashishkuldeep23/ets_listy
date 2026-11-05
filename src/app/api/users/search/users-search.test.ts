@@ -74,7 +74,7 @@ describe("GET /api/users/search", () => {
   it("is rate-limited per user", async () => {
     const me = await createUserAndCookie({ name: "Asha", email: "asha@example.com" });
     let last = 200;
-    for (let i = 0; i < 301; i++) last = (await search("ra", me.cookie)).status;
+    for (let i = 0; i < 61; i++) last = (await search("ra", me.cookie)).status;
     expect(last).toBe(429);
   });
 });

@@ -3,6 +3,21 @@
 export const FEEDBACK_DEFAULT_NAME = "User";
 export const FEEDBACK_DEFAULT_RATING = 5;
 
+export const FEEDBACK_CATEGORIES = ["suggestion", "appreciation", "feedback", "bug"] as const;
+export type FeedbackCategory = (typeof FEEDBACK_CATEGORIES)[number];
+/** Also what older entries, saved before categories existed, count as. */
+export const FEEDBACK_DEFAULT_CATEGORY: FeedbackCategory = "feedback";
+
+export const FEEDBACK_CATEGORY_LABELS: Record<FeedbackCategory, string> = {
+  suggestion: "Suggestion",
+  appreciation: "Appreciation",
+  feedback: "Feedback",
+  bug: "Bug",
+};
+
+export const isFeedbackCategory = (value: unknown): value is FeedbackCategory =>
+  (FEEDBACK_CATEGORIES as readonly unknown[]).includes(value);
+
 // Written out in full: Tailwind only generates classes it can find as plain text.
 const TONES = [
   "border-tone-1/50 bg-tone-1/10 hover:border-tone-1",

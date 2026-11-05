@@ -2,6 +2,7 @@
 // over the wire (dates arrive as ISO strings in the browser).
 
 import type { FolderStatus } from "@/lib/constants";
+import type { FeedbackCategory } from "@/lib/feedback";
 
 /** The logged-in user, as returned by /api/auth/me. */
 export interface SessionUser {
@@ -17,10 +18,21 @@ export interface PasswordStatus {
   hasPassword: boolean;
 }
 
+/** POST /api/auth/signup: the activation email went to this address. */
+export interface SignupPendingResponse {
+  email: string;
+}
+
+/** POST /api/auth/activate: the new account, and where to go next. */
+export interface ActivationResponse extends SessionUser {
+  next: string;
+}
+
 /** One feedback entry. Who wrote it stays hidden: only the name they chose, and whether it is mine. */
 export interface FeedbackDTO {
   id: string;
   name: string;
+  category: FeedbackCategory;
   rating: number;
   message: string;
   mine: boolean;

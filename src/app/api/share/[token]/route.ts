@@ -14,9 +14,10 @@ const INVALID = "This link is not valid or was turned off";
 
 export async function GET(request: Request, ctx: Ctx): Promise<Response> {
   try {
-    // Slow down token guessing (per IP, before any DB work). Higher than
-    // accept's limit because a viewer may simply refresh the page.
-    const limit = rateLimit(`share-view:${getClientIp(request)}`, { limit: 120 });
+    // Per IP, before any DB work. An open page reloads every 15 s (60 in this
+    // window) and a family, college or mobile network can share one IP, so this
+    // leaves room for about 20 viewers. Tokens are far too long to guess anyway.
+    const limit = rateLimit(`share-view:${getClientIp(request)}`, { limit: 1200 });
     if (!limit.ok) return tooManyRequests(limit.retryAfter);
 
     const { token } = await ctx.params;

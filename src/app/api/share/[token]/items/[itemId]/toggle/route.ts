@@ -21,8 +21,8 @@ const INVALID = "This link is not valid or was turned off";
 
 export async function POST(request: Request, ctx: Ctx): Promise<Response> {
   try {
-    // No login here, so limit per IP (before any DB work).
-    const limit = rateLimit(`share-toggle:${getClientIp(request)}`, { limit: 200 });
+    // No login here, so limit per IP (before any DB work); many guests can share one.
+    const limit = rateLimit(`share-toggle:${getClientIp(request)}`, { limit: 1000 });
     if (!limit.ok) return tooManyRequests(limit.retryAfter);
 
     const { token, itemId } = await ctx.params;

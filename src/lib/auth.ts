@@ -5,7 +5,7 @@ import { connectDB } from "@/lib/db";
 import type { GoogleProfile } from "@/lib/google";
 import { jsonError } from "@/lib/http";
 import { LIMITS } from "@/lib/limits";
-import { SESSION_COOKIE, SESSION_MAX_AGE, createSessionToken, verifySessionToken } from "@/lib/session";
+import { SESSION_COOKIE, SESSION_MAX_AGE, createSessionToken, readSessionToken } from "@/lib/session";
 import { User } from "@/models/User";
 import type { SessionUser } from "@/types";
 
@@ -38,20 +38,26 @@ export function readCookie(request: Request, name: string): string | null {
   if (!header) return null;
   for (const part of header.split(";")) {
     const [key, ...rest] = part.trim().split("=");
-    if (key === name) return decodeURIComponent(rest.join("="));
+    if (key !== name) continue;
+    try {
+      return decodeURIComponent(rest.join("="));
+    } catch {
+      // Cookies are browser input: a broken one means "no cookie", not a 500.
+      return null;
+    }
   }
   return null;
 }
 
 /** The logged-in user as { id, name, email }, or null. */
 export async function getSessionUser(request: Request): Promise<SessionUser | null> {
-  const userId = await verifySessionToken(readCookie(request, SESSION_COOKIE));
-  if (!userId || !mongoose.isValidObjectId(userId)) return null;
+  const claims = await readSessionToken(readCookie(request, SESSION_COOKIE));
+  if (!claims || !mongoose.isValidObjectId(claims.userId)) return null;
 
   await connectDB();
-  // Look the user up every time so a deleted account stops working at once.
-  const user = await User.findById(userId).lean();
-  if (!user) return null;
+  // Look the user up every time so a deleted account or an ended session stops working at once.
+  const user = await User.findById(claims.userId).lean();
+  if (!user || (user.sessionVersion ?? 0) !== claims.version) return null;
   return { id: String(user._id), name: user.name, email: user.email };
 }
 
@@ -62,7 +68,15 @@ export async function getSessionUser(request: Request): Promise<SessionUser | nu
  */
 export async function requireUser(request: Request): Promise<SessionUser | Response> {
   const user = await getSessionUser(request);
-  return user ?? jsonError("Please log in", 401);
+  if (user) return user;
+  const response = jsonError("Please log in", 401);
+  // src/proxy.ts checks only the signature, so it would keep sending someone with an
+  // ended session from /login back to the home page. Dropping the cookie breaks that loop.
+  if (readCookie(request, SESSION_COOKIE) !== null) {
+    const secure = cookieOptions.secure ? "; Secure" : "";
+    response.headers.append("Set-Cookie", `${SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${secure}`);
+  }
+  return response;
 }
 
 const cookieOptions = {
@@ -74,7 +88,9 @@ const cookieOptions = {
 
 /** Signs a token for the user and sets it on a NextResponse. */
 export async function setSessionCookie(response: NextResponse, userId: string): Promise<NextResponse> {
-  const token = await createSessionToken(userId);
+  await connectDB();
+  const user = await User.findById(userId).select("sessionVersion").lean();
+  const token = await createSessionToken(userId, user?.sessionVersion ?? 0);
   response.cookies.set(SESSION_COOKIE, token, { ...cookieOptions, maxAge: SESSION_MAX_AGE });
   return response;
 }
@@ -93,7 +109,8 @@ export const oauthCookieOptions = { ...cookieOptions, path: "/api/auth/google" }
  * belongs to a different Google account. Signup doesn't verify emails, so
  * anyone could have registered this address with a password before its real
  * owner came along. Google has now proven ownership, so linking removes that
- * password: otherwise whoever set it could still get into the account.
+ * password and ends every older session: otherwise whoever set it could still
+ * get into the account.
  */
 export async function findOrCreateGoogleUser({ sub, email, name }: GoogleProfile): Promise<string | null> {
   await connectDB();
@@ -103,7 +120,10 @@ export async function findOrCreateGoogleUser({ sub, email, name }: GoogleProfile
   const existing = await User.findOne({ email }).select("+googleId").lean();
   if (existing) {
     if (existing.googleId) return null;
-    await User.updateOne({ _id: existing._id }, { $set: { googleId: sub }, $unset: { passwordHash: 1 } });
+    await User.updateOne(
+      { _id: existing._id },
+      { $set: { googleId: sub }, $unset: { passwordHash: 1 }, $inc: { sessionVersion: 1 } }
+    );
     return String(existing._id);
   }
   try {

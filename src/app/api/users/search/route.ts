@@ -17,8 +17,10 @@ export async function GET(request: Request): Promise<Response> {
     const user = await requireUser(request);
     if (user instanceof Response) return user;
 
-    // Typing sends one request per pause, so allow plenty, but stop scrapers.
-    const limit = rateLimit(`user-search:${user.id}`, { limit: 300 });
+    // Each answer holds up to 8 people's emails, so keep this tight enough to slow
+    // harvesting (aa, ab, ac…) while still covering real invites: typing sends one
+    // request per pause.
+    const limit = rateLimit(`user-search:${user.id}`, { limit: 60 });
     if (!limit.ok) return tooManyRequests(limit.retryAfter);
 
     const q = cleanSearchQuery(new URL(request.url).searchParams.get("q"));

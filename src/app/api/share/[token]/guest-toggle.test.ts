@@ -149,11 +149,11 @@ describe("guest ticking via share link", () => {
     expect((await tick(token, milk.id, "{bad json")).status).toBe(400);
   });
 
-  it("rate-limits per IP", async () => {
+  it("rate-limits per IP", { timeout: 120_000 }, async () => {
     const { token, milk } = await setup();
     const ip = { "x-forwarded-for": "9.9.9.9" };
     let last = 200;
-    for (let i = 0; i < 201; i++) last = (await tick(token, milk.id, { done: i % 2 === 0 }, ip)).status;
+    for (let i = 0; i < 1001; i++) last = (await tick(token, milk.id, { done: i % 2 === 0 }, ip)).status;
     expect(last).toBe(429);
   });
 });

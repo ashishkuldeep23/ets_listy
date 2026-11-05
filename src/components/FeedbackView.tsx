@@ -6,15 +6,45 @@
 // shows at once (put back if the server refuses).
 
 import { useEffect, useState, type FormEvent } from "react";
-import { CircleCheck, LoaderCircle, MessageSquareHeart, MessagesSquare, Pencil, Send, Star, Trash2, X } from "lucide-react";
+import {
+  Bug,
+  CircleCheck,
+  Heart,
+  Lightbulb,
+  LoaderCircle,
+  MessageSquare,
+  MessageSquareHeart,
+  MessagesSquare,
+  Pencil,
+  Send,
+  Star,
+  Trash2,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import ErrorText from "@/components/ErrorText";
 import Loading from "@/components/Loading";
 import { apiFetch } from "@/lib/apiClient";
-import { FEEDBACK_DEFAULT_NAME, FEEDBACK_DEFAULT_RATING, feedbackTone } from "@/lib/feedback";
+import {
+  FEEDBACK_CATEGORIES,
+  FEEDBACK_CATEGORY_LABELS,
+  FEEDBACK_DEFAULT_CATEGORY,
+  FEEDBACK_DEFAULT_NAME,
+  FEEDBACK_DEFAULT_RATING,
+  feedbackTone,
+  type FeedbackCategory,
+} from "@/lib/feedback";
 import { LIMITS } from "@/lib/limits";
 import type { FeedbackDTO, FeedbackListResponse } from "@/types";
 
 const STARS = Array.from({ length: LIMITS.FEEDBACK_RATING_MAX }, (_, i) => i + 1);
+
+const CATEGORY_ICONS: Record<FeedbackCategory, LucideIcon> = {
+  suggestion: Lightbulb,
+  appreciation: Heart,
+  feedback: MessageSquare,
+  bug: Bug,
+};
 
 const starLabel = (n: number) => `${n} ${n === 1 ? "star" : "stars"}`;
 const asTime = (value: string | Date) => new Date(value).getTime();
@@ -106,6 +136,7 @@ interface FeedbackFormProps {
 function FeedbackForm({ editing, onSaved, onCancel }: FeedbackFormProps) {
   // The default name shows as the placeholder: left empty, the server uses it.
   const [name, setName] = useState(editing && editing.name !== FEEDBACK_DEFAULT_NAME ? editing.name : "");
+  const [category, setCategory] = useState<FeedbackCategory>(editing?.category ?? FEEDBACK_DEFAULT_CATEGORY);
   const [rating, setRating] = useState(editing?.rating ?? FEEDBACK_DEFAULT_RATING);
   const [message, setMessage] = useState(editing?.message ?? "");
   const [busy, setBusy] = useState(false);
@@ -121,10 +152,11 @@ function FeedbackForm({ editing, onSaved, onCancel }: FeedbackFormProps) {
     try {
       const saved = await apiFetch<FeedbackDTO>(editing ? `/api/feedback/${editing.id}` : "/api/feedback", {
         method: editing ? "PATCH" : "POST",
-        body: JSON.stringify({ name, rating, message }),
+        body: JSON.stringify({ name, category, rating, message }),
       });
       onSaved(saved);
       setName("");
+      setCategory(FEEDBACK_DEFAULT_CATEGORY);
       setRating(FEEDBACK_DEFAULT_RATING);
       setMessage("");
       setThanked(true);
@@ -164,6 +196,8 @@ function FeedbackForm({ editing, onSaved, onCancel }: FeedbackFormProps) {
         />
       </label>
 
+      <CategoryPicker value={category} onChange={setCategory} />
+
       <StarPicker value={rating} onChange={setRating} />
 
       <label className="flex flex-col gap-1 text-sm">
@@ -202,6 +236,36 @@ function FeedbackForm({ editing, onSaved, onCancel }: FeedbackFormProps) {
         {busy ? "Sending…" : editing ? "Save changes" : "Submit"}
       </button>
     </form>
+  );
+}
+
+/** Real radio buttons under the pills, so arrow keys and screen readers work. */
+function CategoryPicker({ value, onChange }: { value: FeedbackCategory; onChange: (category: FeedbackCategory) => void }) {
+  return (
+    <fieldset className="flex flex-col gap-1 text-sm">
+      <legend className="mb-1">Category</legend>
+      <div className="flex flex-wrap gap-2">
+        {FEEDBACK_CATEGORIES.map((category) => {
+          const Icon = CATEGORY_ICONS[category];
+          return (
+            <label key={category} className="cursor-pointer">
+              <input
+                type="radio"
+                name="feedback-category"
+                value={category}
+                checked={value === category}
+                onChange={() => onChange(category)}
+                className="peer sr-only"
+              />
+              <span className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-muted transition-colors duration-150 peer-checked:border-accent peer-checked:text-accent peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent hover:text-fg">
+                <Icon className="size-4" aria-hidden />
+                {FEEDBACK_CATEGORY_LABELS[category]}
+              </span>
+            </label>
+          );
+        })}
+      </div>
+    </fieldset>
   );
 }
 
@@ -250,6 +314,7 @@ interface FeedbackCardProps {
 
 function FeedbackCard({ feedback, editing, onEdit, onDelete }: FeedbackCardProps) {
   const edited = asTime(feedback.updatedAt) > asTime(feedback.createdAt);
+  const CategoryIcon = CATEGORY_ICONS[feedback.category];
 
   return (
     <li
@@ -276,6 +341,10 @@ function FeedbackCard({ feedback, editing, onEdit, onDelete }: FeedbackCardProps
           </div>
         )}
       </div>
+      <span className="flex w-fit items-center gap-1 rounded-full border border-accent/50 px-2 py-0.5 text-xs text-accent">
+        <CategoryIcon className="size-3.5" aria-hidden />
+        {FEEDBACK_CATEGORY_LABELS[feedback.category]}
+      </span>
       <p className="flex-1 text-sm wrap-break-word whitespace-pre-wrap">{feedback.message}</p>
       <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted">
         <span className="font-medium wrap-anywhere text-fg">{feedback.name}</span>

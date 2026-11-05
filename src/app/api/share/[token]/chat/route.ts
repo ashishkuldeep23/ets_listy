@@ -27,7 +27,8 @@ async function guestContext(request: Request, ctx: Ctx) {
 
 export async function GET(request: Request, ctx: Ctx): Promise<Response> {
   try {
-    const limit = rateLimit(`share-chat-read:${getClientIp(request)}`, { limit: 600 });
+    // Per IP, and many guests can share one (an open chat polls 225 times in this window).
+    const limit = rateLimit(`share-chat-read:${getClientIp(request)}`, { limit: 2400 });
     if (!limit.ok) return tooManyRequests(limit.retryAfter);
 
     const guest = await guestContext(request, ctx);

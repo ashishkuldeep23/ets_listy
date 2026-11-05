@@ -8,6 +8,8 @@ export interface IUser {
   passwordHash?: string;
   /** Google's id for the account, once it has logged in with Google. */
   googleId?: string;
+  /** Raised to end all older sessions (password changed, Google took over the account). Missing = 0. */
+  sessionVersion?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -21,6 +23,7 @@ const userSchema = new mongoose.Schema<IUser>(
     passwordHash: { type: String, select: false },
     // Sparse: many accounts have none, and they mustn't clash with each other.
     googleId: { type: String, unique: true, sparse: true, select: false },
+    sessionVersion: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

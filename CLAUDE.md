@@ -53,6 +53,19 @@ then the server's answer replaces it.
 Feature prompts for upcoming work live in `prompts/` (start with
 `prompts/README.md` and `prompts/_common.md`).
 
+Capacity, what to upgrade when, and open security decisions: `SCALING.md`.
+
+Signup: `POST /api/auth/signup` makes a `PendingSignup` (TTL, token hash only) and emails
+a link via `lib/mailer.ts` (Gmail: `USER_EMAIL`, `USER_PASS`; links use `APP_URL`, never the
+Host header). `/activate/[token]` POSTs to `/api/auth/activate`, which makes the `User` and logs in.
+
+Sessions: the JWT carries `User.sessionVersion`; raising it ends all older sessions
+(password change, Google taking over an account). `requireUser` also drops the
+cookie of an ended session, because `proxy.ts` checks only the signature.
+
+Rate limits are per IP on guest and login routes, and in India one IP can be a
+whole mobile network or college: leave room for that. Login counts failures only.
+
 ## Project layout
 
 ```
@@ -65,6 +78,8 @@ src/
     login/, signup/          # auth pages (use components/AuthForm.tsx)
     folders/[id]/page.tsx    # one folder (components/FolderView.tsx)
     api/auth/signup|login|logout|me/route.ts  # me: GET, PATCH { name } (email can't change)
+    api/auth/activate/route.ts # POST { token }: makes the account from a PendingSignup, logs in
+    activate/[token]/page.tsx  # the link in the signup email (components/ActivateAccount.tsx)
     api/auth/google/route.ts, google/callback/route.ts # Google login (state cookie, then session)
     api/auth/password/route.ts # GET status, POST { newPassword, currentPassword? } (logged in; off when Google-only)
     api/folders/route.ts     # GET ?scope=mine|shared&status= (+ counts, perms, progress, my reminder), POST create
@@ -140,7 +155,7 @@ src/
     useOfflineVersion.ts     # re-render when offline data in localStorage changes (-1 on the server)
   lib/
     db.ts          # cached Mongoose connection: always use connectDB()
-    session.ts     # sign/verify session JWT (jose); no DB, used by proxy.ts
+    session.ts     # sign/verify session JWT + its version (jose); no DB, used by proxy.ts
     google.ts      # Google login URLs + ID token check, isGoogleOnly(), isGoogleConfigured()
     reminders.ts   # sendDueReminders(): Web Push, checks access at send time
     pushClient.ts  # browser: enablePush() (permission + subscribe), disablePush() on logout
@@ -178,7 +193,7 @@ src/
     safeRedirect.ts # safeNextPath() for ?next= redirects
     limits.ts      # size limits shared by validators and schemas
     validators.ts  # request body validation
-    http.ts        # jsonError / readJson / serverError / tooManyRequests
+    http.ts        # jsonError / readJson (64 KB cap) / serverError / tooManyRequests
   models/
     User.ts        # passwordHash is select:false
     Folder.ts      # + serializeFolder(), statusFilter() (missing status = active)

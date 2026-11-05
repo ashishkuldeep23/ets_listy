@@ -3,7 +3,10 @@ import { MongoMemoryServer } from "mongodb-memory-server";
 import { afterAll, afterEach, beforeAll, beforeEach } from "vitest";
 import { resetRateLimits } from "@/lib/rateLimit";
 import { resetRealtimeForTests } from "@/lib/realtime";
-import { POST as signup } from "@/app/api/auth/signup/route";
+import { hashPassword } from "@/lib/auth";
+import { connectDB } from "@/lib/db";
+import { createSessionToken, SESSION_COOKIE } from "@/lib/session";
+import { User } from "@/models/User";
 import type { SessionUser } from "@/types";
 
 // Shared helpers for API tests. Call setupTestDb() at the top of a test
@@ -68,17 +71,22 @@ export async function json<T>(response: Response): Promise<T> {
   return (await response.json()) as T;
 }
 
-/** Signs up a user and returns { user, cookie } for authenticated requests. */
+/**
+ * Makes a user straight in the DB and returns { user, cookie } for authenticated
+ * requests. Real signup takes an email round trip (see auth.test.ts).
+ */
 export async function createUserAndCookie({
   name = "Test User",
   email = "test@example.com",
   password = "password123",
 } = {}): Promise<{ user: SessionUser; cookie: string }> {
-  const res = await signup(makeRequest("/api/auth/signup", { method: "POST", body: { name, email, password } }));
-  if (res.status !== 201) throw new Error(`signup failed: ${res.status} ${await res.text()}`);
-  const cookie = sessionCookieFrom(res);
-  if (!cookie) throw new Error("signup did not set a session cookie");
-  return { user: await json<SessionUser>(res), cookie };
+  await connectDB();
+  const created = await User.create({ name, email, passwordHash: await hashPassword(password) });
+  const id = String(created._id);
+  return {
+    user: { id, name: created.name, email: created.email },
+    cookie: `${SESSION_COOKIE}=${await createSessionToken(id)}`,
+  };
 }
 
 /**

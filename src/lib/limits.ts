@@ -1,6 +1,9 @@
 // Size limits shared by the validators and the Mongoose schemas, so the
 // API and the database can never disagree about what is allowed.
 export const LIMITS = {
+  /** Any JSON request. The largest valid one (an item with every field full) is about 2 KB. */
+  REQUEST_BODY_MAX_BYTES: 64 * 1024,
+
   USER_NAME_MAX: 60,
   /** One-time code in Google's redirect; much longer means it isn't one. */
   GOOGLE_CODE_MAX: 2048,
@@ -9,6 +12,10 @@ export const LIMITS = {
   // bcrypt only uses the first 72 bytes of a password; longer ones would
   // silently match on their prefix, so they are rejected instead.
   PASSWORD_MAX_BYTES: 72,
+  /** How long a signup's email link works. */
+  ACTIVATION_LINK_HOURS: 24,
+  /** Wait between emails to one address, so signup can't be used to flood someone's inbox. */
+  ACTIVATION_RESEND_SECONDS: 60,
 
   FOLDER_NAME_MAX: 60,
   FOLDERS_PER_USER: 200,

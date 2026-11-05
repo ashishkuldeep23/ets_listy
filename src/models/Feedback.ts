@@ -1,4 +1,5 @@
 import mongoose, { type Model, type Types } from "mongoose";
+import { FEEDBACK_CATEGORIES, FEEDBACK_DEFAULT_CATEGORY, type FeedbackCategory } from "@/lib/feedback";
 import { LIMITS } from "@/lib/limits";
 import type { FeedbackDTO } from "@/types";
 
@@ -8,6 +9,8 @@ import type { FeedbackDTO } from "@/types";
 export interface IFeedback {
   user: Types.ObjectId;
   name: string;
+  /** Missing on entries saved before categories existed. */
+  category?: FeedbackCategory;
   rating: number;
   message: string;
   deletedAt: Date | null;
@@ -21,6 +24,7 @@ const feedbackSchema = new mongoose.Schema<IFeedback>(
   {
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     name: { type: String, required: true, trim: true, maxlength: LIMITS.FEEDBACK_NAME_MAX },
+    category: { type: String, enum: FEEDBACK_CATEGORIES, default: FEEDBACK_DEFAULT_CATEGORY },
     rating: { type: Number, required: true, min: LIMITS.FEEDBACK_RATING_MIN, max: LIMITS.FEEDBACK_RATING_MAX },
     message: { type: String, required: true, trim: true, maxlength: LIMITS.FEEDBACK_MESSAGE_MAX },
     deletedAt: { type: Date, default: null },
@@ -38,6 +42,7 @@ export function serializeFeedback(feedback: Stored, userId: string): FeedbackDTO
   return {
     id: String(feedback._id),
     name: feedback.name,
+    category: feedback.category ?? FEEDBACK_DEFAULT_CATEGORY,
     rating: feedback.rating,
     message: feedback.message,
     mine: String(feedback.user) === userId,

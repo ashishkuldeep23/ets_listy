@@ -1,15 +1,17 @@
 "use client";
 
-// Shared form for /login and /signup. On success it goes to the `?next=`
-// path (checked by safeNextPath) or home. Shows email + password and/or
+// Shared form for /login and /signup. Login goes on to the `?next=` path
+// (checked by safeNextPath) or home; signup shows "check your email", since the
+// account is made by the link in that email. Shows email + password and/or
 // "Continue with Google", as ONLY_LOGIN_WITH_GOOGLE and the Google keys allow.
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
-import { ListChecks, LoaderCircle, LockKeyhole, LogIn, Mail, UserPlus, UserRound } from "lucide-react";
+import { CircleCheck, ListChecks, LoaderCircle, LockKeyhole, LogIn, Mail, MailCheck, RotateCw, UserPlus, UserRound } from "lucide-react";
 import ErrorText from "@/components/ErrorText";
 import PasswordInput from "@/components/PasswordInput";
+import { LIMITS } from "@/lib/limits";
 import { safeNextPath } from "@/lib/safeRedirect";
 
 interface AuthFormProps {
@@ -24,7 +26,10 @@ export default function AuthForm({ mode, passwordAllowed, googleAllowed }: AuthF
   const searchParams = useSearchParams();
   const next = safeNextPath(searchParams.get("next"));
 
-  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [form, setForm] = useState({ name: "", email: "", password: "", confirmPassword: "" });
+  /** The address an activation email went to: replaces the form with "check your email". */
+  const [sentTo, setSentTo] = useState("");
+  const [resent, setResent] = useState(false);
   // The callback route sends failures back as ?error=google.
   const [error, setError] = useState(searchParams.get("error") === "google" ? "Google login failed. Please try again." : "");
   const [busy, setBusy] = useState(false);
@@ -32,12 +37,18 @@ export default function AuthForm({ mode, passwordAllowed, googleAllowed }: AuthF
   const update = (field: keyof typeof form) => (e: ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [field]: e.target.value }));
 
-  async function onSubmit(e: FormEvent<HTMLFormElement>) {
+  function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (isSignup && form.password !== form.confirmPassword) return setError("Passwords don't match");
+    void send();
+  }
+
+  async function send() {
     setError("");
+    setResent(false);
     setBusy(true);
     try {
-      const body = isSignup ? form : { email: form.email, password: form.password };
+      const body = isSignup ? { ...form, next } : { email: form.email, password: form.password };
       const res = await fetch(`/api/auth/${mode}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -46,6 +57,12 @@ export default function AuthForm({ mode, passwordAllowed, googleAllowed }: AuthF
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         setError(data.error ?? "Something went wrong");
+        return;
+      }
+      if (isSignup) {
+        // No account yet: it is made when the link in the email is opened.
+        setResent(Boolean(sentTo));
+        setSentTo(form.email.trim());
         return;
       }
       // replace (not push) so Back doesn't return to the login form.
@@ -60,6 +77,49 @@ export default function AuthForm({ mode, passwordAllowed, googleAllowed }: AuthF
 
   // Keep ?next= when switching between login and signup.
   const otherHref = `/${isSignup ? "login" : "signup"}${next !== "/" ? `?next=${encodeURIComponent(next)}` : ""}`;
+
+  if (sentTo) {
+    return (
+      <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center p-6">
+        <div className="card animate-fade-up">
+          <h1 className="mb-2 flex items-center gap-2 text-xl font-semibold text-primary">
+            <MailCheck className="size-6 animate-pop" aria-hidden />
+            Check your email
+          </h1>
+          <p className="mb-2 text-sm wrap-anywhere">
+            We sent an activation link to <strong>{sentTo}</strong>. Open it to finish signing up and log in.
+          </p>
+          <p className="mb-4 text-sm text-muted">
+            It works for {LIMITS.ACTIVATION_LINK_HOURS} hours. Can&apos;t find it? Look in your spam folder too.
+          </p>
+          <ErrorText message={error} className="mb-3" />
+          {resent && (
+            <p className="mb-3 flex items-center gap-1.5 text-sm text-accent" role="status">
+              <CircleCheck className="size-4 animate-pop" aria-hidden />
+              Sent again. Only the newest link works.
+            </p>
+          )}
+          <div className="flex flex-col gap-2">
+            <button type="button" disabled={busy} onClick={() => void send()} className="btn-secondary justify-center">
+              {busy ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : <RotateCw className="icon-nudge" aria-hidden />}
+              {busy ? "Sending…" : "Send the email again"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSentTo("");
+                setError("");
+                setResent(false);
+              }}
+              className="btn-ghost justify-center text-sm"
+            >
+              Use a different email
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center p-6">
@@ -124,6 +184,18 @@ export default function AuthForm({ mode, passwordAllowed, googleAllowed }: AuthF
             className="pl-9"
           />
         </Field>
+        {isSignup && (
+          <Field icon={<LockKeyhole />}>
+            <PasswordInput
+              value={form.confirmPassword}
+              onChange={update("confirmPassword")}
+              placeholder="Confirm password"
+              autoComplete="new-password"
+              required
+              className="pl-9"
+            />
+          </Field>
+        )}
 
         <ErrorText message={error} />
 
@@ -164,7 +236,7 @@ function GoogleIcon() {
 function Field({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   return (
     <div className="relative">
-      <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted [&>svg]:size-4" aria-hidden>
+      <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 z-10 text-muted [&>svg]:size-4" >
         {icon}
       </span>
       {children}
